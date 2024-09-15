@@ -13,4 +13,11 @@ let linear_fibo n =
   in
   lin_fib n
 
-let () = print_int (linear_fibo 10)
+let accum_fibo n =
+  let rec f p1 p2 i = if i <> n then f p2 (p1 + p2) (i + 1) else p2 in
+  f 1 1 1
+
+let () =
+  print_int (linear_fibo 10);
+  print_newline ();
+  print_int (accum_fibo 10)
