@@ -53,18 +53,6 @@ let () =
     (if compare a b then "greater" else "smaller")
     b
 
-let equal s1 s2 : bool =
-  let l1 = String.length s1 in
-  let l2 = String.length s2 in
-  if l1 <> l2 then false
-  else
-    let rec cmp i =
-      if i = l1 then true
-      else if String.get s1 i = String.get s2 i then cmp (i + 1)
-      else false
-    in
-    cmp 0
-
 let cake = "Cake"
 
 let cheese_cake = "Cheese Cake"
@@ -77,7 +65,7 @@ let rec factor m1 m2 =
   else
     let rec for' i =
       if i + l1 > l2 then false
-      else if String.equal m1 (String.sub m2 i l1) then true
+      else if m1 = String.sub m2 i l1 then true
       else for' (i + 1)
     in
     for' 0

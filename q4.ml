@@ -2,20 +2,20 @@ let merge_sort l =
   let split l =
     let rec aux left right l =
       match l with
-      | [] -> (List.rev left, List.rev right)
-      | [ x ] -> (List.rev (x :: left), List.rev right)
-      | x1 :: x2 :: xs -> aux (x1 :: left) (x2 :: right) xs
+      | [] -> (left, right)
+      | [ x ] -> (left @ [ x ], right)
+      | x1 :: x2 :: xs -> aux (left @ [ x1 ]) (right @ [ x2 ]) xs
     in
     aux [] [] l
-  in
-  let merge l1 l2 =
+  and merge l1 l2 =
     let rec aux res l1 l2 =
       match (l1, l2) with
-      | [], [] -> List.rev res
-      | l1' :: ls, [] -> aux (l1' :: res) ls l2
-      | [], l2' :: ls -> aux (l2' :: res) l1 ls
+      | [], [] -> res
+      | l1' :: ls, [] -> aux (res @ [ l1' ]) ls l2
+      | [], l2' :: ls -> aux (res @ [ l2' ]) l1 ls
       | l1' :: ls1, l2' :: ls2 ->
-        if l1' > l2' then aux (l2' :: res) l1 ls2 else aux (l1' :: res) ls1 l2
+        if l1' < l2' then aux (res @ [ l1' ]) ls1 l2
+        else aux (res @ [ l2' ]) l1 ls2
     in
     aux [] l1 l2
   in
