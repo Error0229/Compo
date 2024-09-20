@@ -22,8 +22,12 @@ let rec mem q sq =
   | Elt x' -> q = x'
   | Seq (x', y') -> mem q x' || mem q y'
 
-(* let seq2list sq = let res = [] in let rec aux sq = match sq with | Elt x -> x
-   | Seq (x, y) -> (aux x)::res::(aux y) in aux sq *)
+let rec print_listn l =
+  match l with
+  | [] -> print_newline ()
+  | x :: xs ->
+    Printf.printf "%d " x;
+    print_listn xs
 
 let rec print_seq sq =
   match sq with
@@ -56,6 +60,28 @@ let rec fold_right f sq init =
   | Elt x -> f x init
   | Seq (x, y) -> fold_right f x (fold_right f y init)
 
+let rec seq2list s = fold_right (fun x l -> x :: l) s []
+
+let find_opt x l =
+  let res, _ =
+    fold_left
+      (fun (res, id) y ->
+        if res = None && x = y then (Some id, id + 1) else (res, id + 1))
+      (None, 0)
+      l
+  in
+  res
+
+let nth s n =
+  match
+    fold_left
+      (fun (res, id) y -> if id = n then (Some y, id + 1) else (res, id + 1))
+      (None, 0)
+      s
+  with
+  | None, _ -> failwith "No such object"
+  | Some x, _ -> x
+
 let s = Seq (Seq (Seq (Elt 1, Elt 2), Elt 3), Seq (Seq (Elt 4, Elt 5), Elt 6))
 
 let () = print_seqn (tl s)
@@ -75,3 +101,16 @@ let () = print_newline ()
 let () = print_int (fold_right (fun x y -> x - y) s 0)
 
 let () = print_newline ()
+
+let () = print_listn (seq2list s)
+
+let option_to_string opt =
+  match opt with
+  | None -> "None"
+  | Some x -> Printf.sprintf "Some %d" x
+
+let () = print_endline (option_to_string (find_opt 3 s))
+
+let () =
+  print_int (nth s 3);
+  print_newline ()
