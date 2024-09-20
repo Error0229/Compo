@@ -97,7 +97,7 @@ let nth s n =
       (None, 0)
       s
   with
-  | None, _ -> failwith "No such object"
+  | None, _ -> failwith "Don't do this, get some help🗿"
   | Some x, _ -> x
 
 let s = Seq (Seq (Seq (Elt 1, Elt 2), Elt 3), Seq (Seq (Elt 4, Elt 5), Elt 6))
