@@ -37,7 +37,7 @@ end_if_0:
     movl %eax, %edi
     call print_num
 
-# 2 = 3 || 4 <>= 2 * 3
+    # p3: 2 = 3 || 4 <>= 2 * 3
 
     movl $2, %eax
 if_1:
