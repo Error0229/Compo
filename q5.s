@@ -1,4 +1,3 @@
-
 .section .data
     fmt: .string "%d\n"
 
