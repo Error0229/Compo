@@ -91,7 +91,6 @@ ret_f:
 main:
 	pushq %rbp
 	movq %rsp, %rbp	
-	subq $16, %rsp
 	movl $0, %edi
 	movl $1, %esi # (1)
 	shll $15, %esi #(1 << N:15)
@@ -103,7 +102,6 @@ main:
     call printf
 
     xorq    %rax, %rax
-	addq  	$16, %rsp
 	popq 	%rbp
     ret
 
