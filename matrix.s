@@ -52,8 +52,7 @@ for_0:
 	movl %edi, %edx # tmp0
 	imull $15, %edx # tmp0 * 15
 	addl %ecx, %edx
-	sall $2, %edx
-	addl (%r9, %rdx, 1), %eax
+	addl (%r9, %rdx, 4), %eax
 
 	cmpl %r10d, %eax # s < x
 	jg if_x_g_s
