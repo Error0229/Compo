@@ -1,5 +1,5 @@
 .text
-	.globl	main
+.globl	main
 f:
 	pushq 	%rbp
 	movq 	%rsp, %rbp	
@@ -17,6 +17,7 @@ f:
 
 	movl $0, %r10d # s
 	movl $0, %ecx  # j
+
 for_0:
 	cmpl $15, %ecx
 	je ret_for_0
@@ -29,7 +30,6 @@ for_0:
 	# before call
 	movl %edi, -4(%rbp) # i
 	movl %esi, -8(%rbp) # c
-	# movl %edx, (%rbp) # r no need
 	movl %ecx, -12(%rbp) # j
 	movl %r10d, -16(%rbp) # s
 	movl %r8d, -24(%rbp) # key
@@ -53,7 +53,7 @@ for_0:
 	imull $15, %edx # tmp0 * 15
 	addl %ecx, %edx
 	sall $2, %edx
-	addl (%r9, %rdx, 4), %eax
+	addl (%r9, %rdx, 1), %eax
 
 	cmpl %r10d, %eax # s < x
 	jg if_x_g_s
@@ -81,9 +81,6 @@ ret_f_r:
 	movl %edx, %eax
 	jmp ret_f
 
-end_f_0:
-	movl %r10d, (%r9, %r8, 4)  # memo[key] = s
-	movl %r10d, %eax
 ret_f:
 	addq $48, %rsp
 	popq	%rbp
