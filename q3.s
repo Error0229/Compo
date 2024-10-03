@@ -48,10 +48,11 @@ if_1:
     movl $3, %ecx
     mull %ecx
     cmpl $4, %eax
-    jle if_1_t
+    jge if_1_t
 
 if_t_f:
     movl $0, %edi    
+    jmp end_if_1
 
 if_1_t:
     movl $1, %edi
