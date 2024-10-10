@@ -42,3 +42,4 @@ _opam/
 *.exe
 
 **/_build/
+!dune
