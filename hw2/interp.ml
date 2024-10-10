@@ -204,4 +204,3 @@ let file (fl, s) =
   List.iter
     (fun (f,args,body) -> Hashtbl.add functions f.id (args, body)) fl;
   stmt (Hashtbl.create 16) s
-
