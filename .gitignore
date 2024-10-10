@@ -28,6 +28,13 @@ setup.log
 # Local OPAM switch
 _opam/
 
+
+*
+!*/
+!*.*
+
+*.out
+
 .vscode
 
 *.out
