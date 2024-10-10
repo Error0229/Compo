@@ -29,6 +29,7 @@ setup.log
 _opam/
 
 
+
 *
 !*/
 !*.*
@@ -39,3 +40,5 @@ _opam/
 
 *.out
 *.exe
+
+**/_build/
