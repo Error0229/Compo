@@ -34,11 +34,9 @@ _opam/
 !*/
 !*.*
 
-*.out
 
 .vscode
 
-*.out
 *.exe
 
 **/_build/

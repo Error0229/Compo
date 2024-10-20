@@ -104,8 +104,8 @@ and string = parse
     let tokens = Queue.create () in (* next tokens to emit *)
     fun lb ->
       if Queue.is_empty tokens then begin
-	let l = next_tokens lb in
-	List.iter (fun t -> Queue.add t tokens) l
+        let l = next_tokens lb in
+        List.iter (fun t -> Queue.add t tokens) l
       end;
-      Queue.pop tokens
+    Queue.pop tokens
 }
