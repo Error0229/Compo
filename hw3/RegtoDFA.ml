@@ -67,26 +67,61 @@ let rec follow : ichar -> regexp -> Cset.t =
     if Cset.mem c (last r) then Cset.union (follow c r) (first r)
     else follow c r
 
+let rec alphabets : regexp -> Cset.t = function
+  | Epsilon | Star _ -> Cset.empty
+  (* | Character c -> if c <> eof then Cset.singleton c else Cset.empty *)
+  | Character c -> Cset.singleton c
+  | Concat (r1, r2) | Union (r1, r2) -> Cset.union (alphabets r1) (alphabets r2)
+
 let next_state : regexp -> Cset.t -> char -> Cset.t =
  fun r q c ->
-  let fr = first r in
-  List.fold_left
-    (fun acc ic -> if fst ic = c then Cset.union (follow ic r) acc else acc)
+  Cset.fold
+    (fun ci acc -> if fst ci = c then Cset.union (follow ci r) acc else acc)
     q
-    (Cset.to_list fr)
+    Cset.empty
 
-let make_dfa : regexp -> autom = 
-  fun r -> 
-let r = Concat (r, Character eof) in
-(* transitions under construction *)
-let trans = ref Smap.empty in
-let rec transitions q =
-(* the transitions function constructs all the transitions of the state q,
-if this is the first time q is visited *)
-in 
-let q0 = first r in
-transitions q0;
-{ start = q0; trans = !trans }
+let make_dfa : regexp -> autom =
+ fun r ->
+  let r = Concat (r, Character eof) in
+  (* let w = alphabets r in *)
+  (* transitions under construction *)
+  let trans = ref Smap.empty in
+  let rec transitions q =
+    if not (Smap.mem q !trans) then (
+      let delta =
+        Cset.fold
+          (fun ic acc ->
+            let c = fst ic in
+            let q' = next_state r q c in
+            Cmap.add c q' acc)
+          (* w *)
+          q
+          Cmap.empty
+      in
+      trans := Smap.add q delta !trans;
+      Cmap.iter (fun _ q' -> transitions q') delta)
+    (* the transitions function constructs all the transitions of the state q,
+       if this is the first time q is visited *)
+  in
+
+  let q0 = first r in
+  transitions q0;
+  { start = q0; trans = !trans }
+
+let is_final state = Cset.mem eof state
+
+let recognize (aut : autom) (s : string) : bool =
+  let q0 = aut.start in
+  try
+    is_final
+      (String.fold_left
+         (fun q_now ch ->
+           let q's = Smap.find q_now aut.trans in
+           try Cmap.find ch q's with Not_found -> failwith "can't be trans")
+         q0
+         s)
+  with _ -> false
+
 (* Ex 1 *)
 let () =
   let a = Character ('a', 0) in
@@ -95,7 +130,7 @@ let () =
   assert (null (Concat (Epsilon, Star Epsilon)));
   assert (null (Union (Epsilon, a)));
   assert (not (null (Concat (a, Star a))));
-  print_endline "Excerise 1 passed🎉"
+  print_endline "Excerise 1 passed 🎉"
 
 (* Ex 2 *)
 let () =
@@ -113,7 +148,7 @@ let () =
   assert (Cset.cardinal (first (Union (a, b))) = 2);
   assert (Cset.cardinal (first (Concat (Star a, b))) = 2);
   assert (Cset.cardinal (last (Concat (a, Star b))) = 2);
-  print_endline "Excerise 2 passed🎉"
+  print_endline "Excerise 2 passed 🎉"
 
 (* Ex 3 *)
 let () =
@@ -131,4 +166,110 @@ let () =
   assert (Cset.cardinal (follow cb r2) = 2);
   let r3 = Concat (Star a, b) in
   assert (Cset.cardinal (follow ca r3) = 2);
-  print_endline "Excerise 3 passed🎉"
+  print_endline "Excerise 3 passed 🎉"
+
+(* Ex 4 *)
+let fprint_state fmt q =
+  Cset.iter
+    (fun (c, i) ->
+      if c = '#' then Format.fprintf fmt "# "
+      else Format.fprintf fmt "%c%i " c i)
+    q
+
+let fprint_transition fmt q c q' =
+  Format.fprintf
+    fmt
+    "\"%a\" -> \"%a\" [label=\"%c\"];@\n"
+    fprint_state
+    q
+    fprint_state
+    q'
+    c
+
+let fprint_autom fmt a =
+  Format.fprintf fmt "digraph A {@\n";
+  Format.fprintf fmt " @[\"%a\" [ shape = \"rect\"];@\n" fprint_state a.start;
+  Smap.iter
+    (fun q t -> Cmap.iter (fun c q' -> fprint_transition fmt q c q') t)
+    a.trans;
+  Format.fprintf fmt "@]@\n}@."
+
+let save_autom file a =
+  let ch = open_out file in
+  Format.fprintf (Format.formatter_of_out_channel ch) "%a" fprint_autom a;
+  close_out ch
+
+(* Ex 4 *)
+(* (a|b)*a(a|b) *)
+let r =
+  Concat
+    ( Star (Union (Character ('a', 1), Character ('b', 1)))
+    , Concat (Character ('a', 2), Union (Character ('a', 3), Character ('b', 2)))
+    )
+
+let a = make_dfa r
+
+let () =
+  save_autom "autom.dot" a;
+  print_endline "Exercise 4 passed 🎉 (kinda)"
+
+(* Ex 5 *)
+let () = assert (recognize a "aa")
+
+let () = assert (recognize a "ab")
+
+let () = assert (recognize a "abababaab")
+
+let () = assert (recognize a "babababab")
+
+let () = assert (recognize a (String.make 1000 'b' ^ "ab"))
+
+let () = assert (not (recognize a ""))
+
+let () = assert (not (recognize a "a"))
+
+let () = assert (not (recognize a "b"))
+
+let () = assert (not (recognize a "ba"))
+
+let () = assert (not (recognize a "aba"))
+
+let () = assert (not (recognize a "abababaaba"))
+
+let r =
+  Star
+    (Union
+       ( Star (Character ('a', 1))
+       , Concat
+           ( Character ('b', 1)
+           , Concat (Star (Character ('a', 2)), Character ('b', 2)) ) ))
+
+let a = make_dfa r
+
+let () = save_autom "autom2.dot" a
+
+let () = assert (recognize a "")
+
+let () = assert (recognize a "bb")
+
+let () = assert (recognize a "aaa")
+
+let () = assert (recognize a "aaabbaaababaaa")
+
+let () = assert (recognize a "bbbbbbbbbbbbbb")
+
+let () = assert (recognize a "bbbbabbbbabbbabbb")
+
+let () = assert (not (recognize a "b"))
+
+let () = assert (not (recognize a "ba"))
+
+let () = assert (not (recognize a "ab"))
+
+let () = assert (not (recognize a "aaabbaaaaabaaa"))
+
+let () = assert (not (recognize a "bbbbbbbbbbbbb"))
+
+let () = assert (not (recognize a "bbbbabbbbabbbabbbb"))
+
+let () = print_endline "Exercise 5 passed 🎉 "
