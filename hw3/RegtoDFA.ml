@@ -28,6 +28,16 @@ type state = Cset.t (* a state is a set of characters *)
 module Cmap = Map.Make (Char) (* dictionary whose keys are characters *)
 module Smap = Map.Make (Cset) (* dictionary whose keys are states *)
 
+let print_Cmap cm = Cset.iter (fun (c, i) -> Printf.printf "%c%i " c i) cm
+
+let print_Smap sm =
+  Smap.iter
+    (fun q i ->
+      Printf.printf "state %d:" i;
+      print_Cmap q;
+      print_newline ())
+    sm
+
 type autom =
   { start : state
   ; trans : state Cmap.t Smap.t
@@ -117,10 +127,84 @@ let recognize (aut : autom) (s : string) : bool =
       (String.fold_left
          (fun q_now ch ->
            let q's = Smap.find q_now aut.trans in
-           try Cmap.find ch q's with Not_found -> failwith "can't be trans")
+           try Cmap.find ch q's
+           with Not_found -> failwith "No transition for current character")
          q0
          s)
   with _ -> false
+
+let number_states (aut : autom) =
+  let numbering = ref Smap.empty in
+  let counter = ref 0 in
+  Smap.iter
+    (fun q v ->
+      (* print_Cmap q; *)
+      if not (Smap.mem q !numbering) then (
+        numbering := Smap.add q !counter !numbering;
+        counter := !counter + 1;
+        Cmap.iter
+          (fun _ q' ->
+            if not (Smap.mem q' !numbering) then (
+              numbering := Smap.add q' !counter !numbering;
+              counter := !counter + 1))
+          v))
+    aut.trans;
+  !numbering
+
+let generate_state (fmt : Format.formatter) (state : state) (state_num : int)
+    (numbering : int Smap.t) (aut : autom) =
+  Format.fprintf fmt "state%d b = @\n" state_num;
+
+  if is_final state then (
+    Format.fprintf fmt "  b.last <- b.current;@\n";
+    Format.fprintf fmt "  failwith \"token founded\"")
+  else (
+    Format.fprintf fmt "  try@\n";
+    Format.fprintf fmt "  let nc = next_char b in @\n";
+    let trans = try Smap.find state aut.trans with Not_found -> Cmap.empty in
+    if Cmap.is_empty trans then
+      Format.fprintf fmt "    failwith \"lexical error\"@\n"
+    else (
+      Format.fprintf fmt "    match nc with@\n";
+      Cmap.iter
+        (fun ch next_state ->
+          let next_state_num = Smap.find next_state numbering in
+          Format.fprintf fmt "    | '%c' -> state%d b@\n" ch next_state_num)
+        trans;
+      Format.fprintf fmt "    | _ -> failwith \"lexical error\"@\n");
+    Format.fprintf fmt "  with End_of_file -> raise End_of_file@\n")
+
+let generate (filename : string) (aut : autom) =
+  let ch = open_out filename in
+  let fmt = Format.formatter_of_out_channel ch in
+  Format.fprintf
+    fmt
+    "type buffer = { text: string; mutable current: int; mutable last: int }@\n";
+  Format.fprintf fmt "let next_char b =@\n";
+  Format.fprintf
+    fmt
+    "  if b.current = String.length b.text then raise End_of_file;@\n";
+  Format.fprintf fmt "  let c = b.text.[b.current] in@\n";
+  Format.fprintf fmt "  b.current <- b.current + 1;@\n";
+  Format.fprintf fmt "  c@\n@\n";
+  let numbering = number_states aut in
+  (* print_Smap numbering; *)
+  let first = ref true in
+  Smap.iter
+    (fun s i ->
+      if !first then (
+        Format.fprintf fmt "let rec ";
+        first := false)
+      else Format.fprintf fmt "and ";
+      generate_state fmt s i numbering aut;
+      Format.fprintf fmt "@\n")
+    numbering;
+  Format.fprintf
+    fmt
+    "let start = state%d"
+    (try Smap.find aut.start numbering
+     with Not_found -> failwith "No start state?");
+  close_out ch
 
 (* Ex 1 *)
 let () =
@@ -273,3 +357,23 @@ let () = assert (not (recognize a "bbbbbbbbbbbbb"))
 let () = assert (not (recognize a "bbbbabbbbabbbabbbb"))
 
 let () = print_endline "Exercise 5 passed 🎉 "
+
+(* Ex 6 *)
+
+(* a*b *)
+let r3 = Concat (Star (Character ('a', 1)), Character ('b', 1))
+
+let a = make_dfa r3
+
+let () =
+  generate "a.ml" a;
+  print_endline "Exercise 6 passed 🎉 maybe?"
+
+let r4 =
+  Concat
+    ( Concat
+        ( Union (Character ('b', 1), Epsilon)
+        , Star (Concat (Character ('a', 1), Character ('b', 2))) )
+    , Union (Character ('a', 2), Epsilon) )
+
+let () = generate "b.ml" (make_dfa r4)
