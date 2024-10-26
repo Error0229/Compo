@@ -1,5 +1,4 @@
 open A
-open B
 
 let buffer_of_string s = { text = s; current = 0; last = -1 }
 

@@ -367,13 +367,11 @@ let a = make_dfa r3
 
 let () =
   generate "a.ml" a;
-  print_endline "Exercise 6 passed 🎉 maybe?"
+  print_endline "Exercise 6 passed 🎉 but at what cost?"
 
-let r4 =
-  Concat
-    ( Concat
-        ( Union (Character ('b', 1), Epsilon)
-        , Star (Concat (Character ('a', 1), Character ('b', 2))) )
-    , Union (Character ('a', 2), Epsilon) )
+(* inf loop case *)
+(* let r4 = Concat ( Concat ( Union (Character ('b', 1), Epsilon) , Star (Concat
+   (Character ('a', 1), Character ('b', 2))) ) , Union (Character ('a', 2),
+   Epsilon) )
 
-let () = generate "b.ml" (make_dfa r4)
+   let () = generate "a.ml" (make_dfa r4) *)
