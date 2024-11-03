@@ -375,4 +375,6 @@ let () =
    (Character ('a', 1), Character ('b', 2))) ) , Union (Character ('a', 2),
    Epsilon) )
 
-   let () = generate "a.ml" (make_dfa r4) *)
+   let () = save_autom "s.dot" (make_dfa r4) *)
+
+(* let () = generate "a.ml" (make_dfa r4) *)
