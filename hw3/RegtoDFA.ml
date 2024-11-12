@@ -370,8 +370,11 @@ let () =
   print_endline "Exercise 6 passed 🎉 but at what cost?"
 
 (* inf loop case *)
+(* (b|eps)(ab)*(a|eps) *)
 (* let r4 = Concat ( Concat ( Union (Character ('b', 1), Epsilon) , Star (Concat
    (Character ('a', 1), Character ('b', 2))) ) , Union (Character ('a', 2),
    Epsilon) )
 
-   let () = generate "a.ml" (make_dfa r4) *)
+   let () = save_autom "s.dot" (make_dfa r4) *)
+
+(* let () = generate "a.ml" (make_dfa r4) *)
