@@ -29,5 +29,3 @@ prog:
   /* To be completed */ EOF
     { { defs = []; main = Sblock [] } (* To be modified *) }
 ;
-
-

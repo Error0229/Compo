@@ -12,6 +12,19 @@
 at each carriage return ('\n' character) *)
 
 }
+let letter = ['a'-'z' 'A'-'Z']
+let digit = ['0'-'9']
+let decimals = '.' digit*
+let exponent = ['e' 'E'] ['+' '-']? digit+
+let space = [' ' '\t' '\r']
+let comment = "//" [^'\n']*
 
 rule token = parse
-  | _ { assert false (* To be completed *) }
+  | '\n' {new_line lexbuf; token lexbuf}
+  | (space|comment)+ { token lexbuf }
+  | "(*" { comment lexbuf }
+  | eof { EOF } 
+and comment = parse 
+  | "*)" { token lexbuf }
+  | _ { comment lexbuf }
+  | eof { failwith "non-closed comment"}
