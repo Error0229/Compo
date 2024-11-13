@@ -1,4 +1,4 @@
-
-// start with a file containing only comments
-
-// then complete this file as the tests progress
+repeat 4 {
+    forward 100
+    turnleft 90
+}
