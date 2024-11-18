@@ -1,4 +1,30 @@
-repeat 4 {
-    forward 100
-    turnleft 90
+def koch_curve(length, depth)
+{
+  if depth
+  {
+    koch_curve(length/3, depth - 1)
+    turnleft 60
+    koch_curve(length/3, depth - 1)
+    turnright 120
+    koch_curve(length/3, depth - 1)
+    turnleft 60
+    koch_curve(length/3, depth - 1)
+  }
+  else
+  {
+    forward length
+  }
 }
+
+def snowflake(length, depth)
+{
+  repeat 3
+  {
+    koch_curve(length, depth)
+    turnright 120
+  }
+}
+
+pendown
+color blue
+snowflake(513, 5)
