@@ -38,10 +38,6 @@ let native_env =
 let error ?(loc = dummy_loc) f =
   Format.kasprintf (fun s -> raise (Error (loc, s))) ("@[" ^^ f ^^ "@]")
 
-let file ?debug:(b = false) (p : Ast.file) : Ast.tfile =
-  debug := b;
-  failwith "TODO"
-
 let rec type_expr ctx expr : texpr * typ =
   match expr with
   | Ecst c -> (
@@ -125,4 +121,102 @@ let rec type_expr ctx expr : texpr * typ =
       error
         "The first argument is not a list, or the second argument is not an int"
 
-(* Continue handling other cases *)
+let rec type_stmt ctx stmt : tstmt * context =
+  match stmt with
+  | Sif (cond, s1, s2) ->
+    let typ_cond, t = type_expr ctx cond in
+    if t = TBool then
+      let ts1, ctx1 = type_stmt ctx s1 in
+      let ts2, ctx2 = type_stmt ctx s2 in
+      (* both ctx1, ctx2 are local context right? *)
+      (TSif (typ_cond, ts1, ts2), ctx)
+    else error "the codition did not return a bool"
+  | Sreturn e ->
+    let typ_e, _ = type_expr ctx e in
+    (TSreturn typ_e, ctx)
+  | Sassign (id, e) -> (
+    let v_name = id.id in
+    let tye, t = type_expr ctx e in
+    match SMap.find_opt v_name ctx.vars with
+    | Some vt ->
+      if t = vt then (TSassign ({ v_name; v_ofs = 0 }, tye), ctx)
+      else error "the variable type does not match with the value"
+    | None ->
+      let new_ctx =
+        { vars = SMap.add v_name t ctx.vars
+        ; funcs =
+            (if SMap.mem v_name ctx.funcs then SMap.remove v_name ctx.funcs
+             else ctx.funcs)
+        }
+      in
+      (TSassign ({ v_name; v_ofs = 0 }, tye), new_ctx))
+  | Sprint e -> (
+    match type_expr ctx e with
+    | _, TAny | _, TFunc _ -> error "Func and Any type cannot be print"
+    | tye, _ -> (TSprint tye, ctx))
+  | Sblock sl ->
+    let rec type_stmts ctx stmts =
+      match stmts with
+      | [] -> ([], ctx)
+      | stmt :: rest ->
+        let t_stmt, ctx' = type_stmt ctx stmt in
+        let t_rest, ctx'' = type_stmts ctx' rest in
+        (t_stmt :: t_rest, ctx'')
+    in
+    let t_stmts, ctx' = type_stmts ctx sl in
+    (TSblock t_stmts, ctx')
+  | Sfor (it, lst, s) ->
+    let tye, t = type_expr ctx lst in
+    let tys, ctx' =
+      type_stmt { vars = SMap.add it.id t ctx.vars; funcs = ctx.funcs } s
+    in
+    if t = TList then (TSfor ({ v_name = it.id; v_ofs = 0 }, tye, tys), ctx')
+    else error "can only iterate list"
+  | Seval e ->
+    let tye, _ = type_expr ctx e in
+    (TSeval tye, ctx)
+  | Sset (e1, e2, e3) ->
+    let te1, t1 = type_expr ctx e1 in
+    if t1 <> TList then error "the variable must be a list"
+    else
+      let te2, t2 = type_expr ctx e2 in
+      if t2 <> TInt then error "the index of an array must be an int"
+      else
+        let te3, t3 = type_expr ctx e3 in
+        (TSset (te1, te2, te3), ctx)
+
+let rec type_def ctx (id, idl, stmt) : tdef * context =
+  let fname = id.id in
+  if SMap.mem fname ctx.funcs then
+    error ~loc:id.loc "Function %s is already defined" fname;
+  if List.mem fname [ "range"; "len"; "list" ] then
+    error ~loc:id.loc "Function %s cannot shadow a builtin function" fname;
+  let params = List.map (fun p -> p.id) idl in
+  let unique_params = List.sort_uniq String.compare params in
+  if List.length params <> List.length unique_params then
+    error "Function paramteres must be unique";
+  let ts, _ = type_stmt ctx stmt in
+  let fn_params = List.map (fun id -> { v_name = id.id; v_ofs = 0 }) idl in
+  let fn = { fn_name = fname; fn_params } in
+  ( (fn, ts)
+  , { vars = ctx.vars
+    ; funcs = SMap.add fname (List.map (fun _ -> TAny) idl, TAny) ctx.funcs
+    } )
+
+let rec type_file ctx (dl, s) : tdef list =
+  let ts, ctx' = type_stmt ctx s in
+  let main = [ ({ fn_name = "main"; fn_params = [] }, ts) ] in
+  let rec type_defs ctx defs =
+    match defs with
+    | [] -> ([], ctx)
+    | def :: rest ->
+      let t_def, ctx' = type_def ctx def in
+      let t_rest, ctx'' = type_defs ctx' rest in
+      (t_def :: t_rest, ctx'')
+  in
+  let tds, _ = type_defs ctx' dl in
+  main @ tds
+
+let file ?debug:(b = false) (p : Ast.file) : Ast.tfile =
+  debug := b;
+  type_file { vars = SMap.empty; funcs = SMap.empty } p
