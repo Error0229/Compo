@@ -46,7 +46,3 @@ for n in [0, 1, 11, 42]:
     print(fib(n))
 
 # q6/q7 in tests and compare_list3
-f = 100
-def f (n):
-    print(n + n)
-print(f * f)
