@@ -130,7 +130,7 @@ let rec type_stmt ctx stmt : tstmt * context =
       let ts2, ctx2 = type_stmt ctx s2 in
       (* both ctx1, ctx2 are local context right? *)
       (TSif (typ_cond, ts1, ts2), ctx)
-    else error "the codition did not return a bool"
+    else error "the condition did not return a bool"
   | Sreturn e ->
     let typ_e, _ = type_expr ctx e in
     (TSreturn typ_e, ctx)
