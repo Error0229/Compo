@@ -48,39 +48,57 @@ let rec type_expr ctx expr : texpr * typ =
     | Cstring _ -> (TEcst c, TString))
   | Eident id -> (
     match SMap.find_opt id.id ctx.vars with
-    | Some t -> (TEvar { v_name = id.id; v_ofs = 0 (* Placeholder *) }, t)
-    | None -> error ~loc:id.loc "Unbound variable %s" id.id)
+    | Some t -> (TEvar { v_name = id.id; v_ofs = 0 }, t)
+    | None ->
+      error "Unbounded identifier %s" id.id
+      (* If variables must be declared before use, you might raise an error *)
+      (* Alternatively, you can assign TAny to undeclared variables *)
+      (* let t = TAny in let ctx = { ctx with vars = SMap.add id.id t ctx.vars }
+         in (TEvar { v_name = id.id; v_ofs = 0 }, t) *))
   | Ebinop (op, e1, e2) -> (
     let te1, t1 = type_expr ctx e1 in
     let te2, t2 = type_expr ctx e2 in
-    if t1 <> t2 then error "TypeError: you can only do binop to same type"
-    else
-      match op with
-      | Badd ->
-        if t1 = t2 then
-          match t1 with
-          | TString | TInt | TList -> (TEbinop (op, te1, te2), t1)
-          | _ -> error "TypeError: unsupported operand type(s) for +"
-        else error "TypeError: unsupported type to use + operand"
-      | Bsub | Bmul | Bdiv | Bmod ->
-        if t1 = TInt && t2 = TInt then (TEbinop (op, te1, te2), TInt)
-        else error "You can only use - * / mod for int"
-      | Beq | Bneq -> (TEbinop (op, te1, te2), TBool)
-      | Blt | Ble | Bgt | Bge ->
-        if t1 = TInt && t2 = TInt then (TEbinop (op, te1, te2), TBool)
-        else error "can only do <= >= < > on int comparison"
-      | Band | Bor ->
-        if t1 = TBool && t2 = TBool then (TEbinop (op, te1, te2), TBool)
-        else error "can not do 'and' and 'or' on not bool value")
+    match op with
+    | Bsub | Bmul | Bdiv | Bmod -> (
+      match (t1, t2) with
+      | TInt, TInt -> (TEbinop (op, te1, te2), TInt)
+      | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TAny)
+      | _, _ ->
+        error "TypeError: unsupported operand types for arithmetic operation")
+    | Badd -> (
+      (* Handle overloaded '+' operator *)
+      match (t1, t2) with
+      | TString, TString -> (TEbinop (op, te1, te2), TString)
+      | TList, TList -> (TEbinop (op, te1, te2), TList)
+      | TInt, TInt -> (TEbinop (op, te1, te2), TInt)
+      | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TAny)
+      | _, _ -> error "TypeError: unsupported operand types for '+'")
+    | Beq | Bneq ->
+      (* Equality checks can be between any types *)
+      (TEbinop (op, te1, te2), TBool)
+    | Blt | Ble | Bgt | Bge -> (
+      match (t1, t2) with
+      | TInt, TInt -> (TEbinop (op, te1, te2), TBool)
+      | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TBool)
+      | _, _ -> error "TypeError: unsupported operand types for comparison")
+    | Band | Bor -> (
+      match (t1, t2) with
+      | TBool, TBool -> (TEbinop (op, te1, te2), TBool)
+      | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TBool)
+      | _, _ -> error "TypeError: logical operators require boolean operands"))
   | Eunop (op, e) -> (
     let te, t = type_expr ctx e in
     match op with
-    | Uneg ->
-      if t = TInt then (TEunop (op, te), TInt)
-      else error "connot use - as a negative operator for a value is not int"
-    | Unot ->
-      if t = TBool then (TEunop (op, te), TBool)
-      else error "the 'not' operator can only apply on boolean variable")
+    | Uneg -> (
+      match t with
+      | TInt -> (TEunop (op, te), TInt)
+      | TAny -> (TEunop (op, te), TAny)
+      | _ -> error "TypeError: unary '-' requires an integer operand")
+    | Unot -> (
+      match t with
+      | TBool -> (TEunop (op, te), TBool)
+      | TAny -> (TEunop (op, te), TBool)
+      | _ -> error "TypeError: 'not' requires a boolean operand"))
   | Ecall (id, args) -> (
     let fname = id.id in
     match SMap.find_opt fname ctx.funcs with
@@ -96,13 +114,16 @@ let rec type_expr ctx expr : texpr * typ =
         List.map2
           (fun param_type arg ->
             let t_arg, arg_type = type_expr ctx arg in
-            if arg_type = param_type then t_arg
-            else error "Type mismatch in function arguments")
+            match param_type with
+            | TAny -> t_arg (* Accept any type *)
+            | _ ->
+              if arg_type = param_type || arg_type = TAny then t_arg
+              else error "Type mismatch in function arguments")
           param_types
           args
       in
       (TEcall ({ fn_name = fname; fn_params = [] }, typed_args), ret_type)
-    | _ -> error "Unbound function %s" fname)
+    | None -> error ~loc:id.loc "Unbound function %s" fname)
   | Elist el ->
     let typed_list =
       List.map
@@ -113,13 +134,13 @@ let rec type_expr ctx expr : texpr * typ =
     in
     (TElist typed_list, TList)
     (* Should I check thier type? to force them have only type for a list*)
-  | Eget (e1, e2) ->
+  | Eget (e1, e2) -> (
     let te1, t1 = type_expr ctx e1 in
     let te2, t2 = type_expr ctx e2 in
-    if t1 = TList && t2 = TInt then (TEget (te1, te2), TAny)
-    else
-      error
-        "The first argument is not a list, or the second argument is not an int"
+    match (t1, t2) with
+    | TList, TInt -> (TEget (te1, te2), TAny) (* Result can be any type *)
+    | TList, TAny | TAny, TInt | TAny, TAny -> (TEget (te1, te2), TAny)
+    | _, _ -> error "TypeError: invalid types for list indexing")
 
 let rec type_stmt ctx stmt : tstmt * context =
   match stmt with
