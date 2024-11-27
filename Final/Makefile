@@ -7,7 +7,10 @@ tests: minipython.exe
 	bash test -2 "dune exec ./minipython.exe"
 
 type: minipython.exe
-	cd tests-mini-python && bash test -2 ../minipython.exe
+	cd tests-mini-python && bash test -v2 ../minipython.exe
+
+parse: minipython.exe
+	cd tests-mini-python && bash test -v1 ../minipython.exe
 
 minipython.exe:
 	dune build minipython.exe
@@ -15,4 +18,4 @@ minipython.exe:
 clean:
 	dune clean
 
-.PHONY: all clean minipython.exe tests type
+.PHONY: all clean minipython.exe tests type parse
