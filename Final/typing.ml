@@ -13,7 +13,6 @@ type typ =
   | TInt
   | TList
   | TAny
-  | TFunc of typ list * typ (* parameters and return value's type*)
 
 module SMap = Map.Make (String)
 
@@ -23,7 +22,7 @@ type context =
         (* Function environment: param types and return type *)
   }
 
-let native_env =
+let native_ctx =
   { vars = SMap.empty
   ; funcs =
       SMap.of_list
@@ -49,12 +48,7 @@ let rec type_expr ctx expr : texpr * typ =
   | Eident id -> (
     match SMap.find_opt id.id ctx.vars with
     | Some t -> (TEvar { v_name = id.id; v_ofs = 0 }, t)
-    | None ->
-      error "Unbounded identifier %s" id.id
-      (* If variables must be declared before use, you might raise an error *)
-      (* Alternatively, you can assign TAny to undeclared variables *)
-      (* let t = TAny in let ctx = { ctx with vars = SMap.add id.id t ctx.vars }
-         in (TEvar { v_name = id.id; v_ofs = 0 }, t) *))
+    | None -> error "Unbounded identifier %s" id.id)
   | Ebinop (op, e1, e2) -> (
     let te1, t1 = type_expr ctx e1 in
     let te2, t2 = type_expr ctx e2 in
@@ -81,11 +75,7 @@ let rec type_expr ctx expr : texpr * typ =
       | TInt, TInt -> (TEbinop (op, te1, te2), TBool)
       | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TBool)
       | _, _ -> error "TypeError: unsupported operand types for comparison")
-    | Band | Bor -> (
-      match (t1, t2) with
-      | TBool, TBool -> (TEbinop (op, te1, te2), TBool)
-      | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TBool)
-      | _, _ -> error "TypeError: logical operators require boolean operands"))
+    | Band | Bor -> (TEbinop (op, te1, te2), TBool))
   | Eunop (op, e) -> (
     let te, t = type_expr ctx e in
     match op with
@@ -94,11 +84,7 @@ let rec type_expr ctx expr : texpr * typ =
       | TInt -> (TEunop (op, te), TInt)
       | TAny -> (TEunop (op, te), TAny)
       | _ -> error "TypeError: unary '-' requires an integer operand")
-    | Unot -> (
-      match t with
-      | TBool -> (TEunop (op, te), TBool)
-      | TAny -> (TEunop (op, te), TBool)
-      | _ -> error "TypeError: 'not' requires a boolean operand"))
+    | Unot -> (TEunop (op, te), TBool))
   | Ecall (id, args) -> (
     let fname = id.id in
     match SMap.find_opt fname ctx.funcs with
@@ -146,34 +132,20 @@ let rec type_stmt ctx stmt : tstmt * context =
   match stmt with
   | Sif (cond, s1, s2) ->
     let typ_cond, t = type_expr ctx cond in
-    if t = TBool then
-      let ts1, ctx1 = type_stmt ctx s1 in
-      let ts2, ctx2 = type_stmt ctx s2 in
-      (* both ctx1, ctx2 are local context right? *)
-      (TSif (typ_cond, ts1, ts2), ctx)
-    else error "the condition did not return a bool"
+    let ts1, ctx1 = type_stmt ctx s1 in
+    let ts2, ctx2 = type_stmt ctx1 s2 in
+    (* both ctx1, ctx2 are local context right? *)
+    (TSif (typ_cond, ts1, ts2), ctx2)
   | Sreturn e ->
     let typ_e, _ = type_expr ctx e in
     (TSreturn typ_e, ctx)
-  | Sassign (id, e) -> (
+  | Sassign (id, e) ->
     let v_name = id.id in
     let tye, t = type_expr ctx e in
-    match SMap.find_opt v_name ctx.vars with
-    | Some vt ->
-      if t = vt then (TSassign ({ v_name; v_ofs = 0 }, tye), ctx)
-      else error "the variable type does not match with the value"
-    | None ->
-      let new_ctx =
-        { vars = SMap.add v_name t ctx.vars
-        ; funcs =
-            (if SMap.mem v_name ctx.funcs then SMap.remove v_name ctx.funcs
-             else ctx.funcs)
-        }
-      in
-      (TSassign ({ v_name; v_ofs = 0 }, tye), new_ctx))
+    let ctx' = { ctx with vars = SMap.add v_name t ctx.vars } in
+    (TSassign ({ v_name; v_ofs = 0 }, tye), ctx')
   | Sprint e -> (
     match type_expr ctx e with
-    | _, TAny | _, TFunc _ -> error "Func and Any type cannot be print"
     | tye, _ -> (TSprint tye, ctx))
   | Sblock sl ->
     let rec type_stmts ctx stmts =
@@ -206,27 +178,36 @@ let rec type_stmt ctx stmt : tstmt * context =
         let te3, t3 = type_expr ctx e3 in
         (TSset (te1, te2, te3), ctx)
 
-let rec type_def ctx (id, idl, stmt) : tdef * context =
+let type_def ctx (id, params, body) : tdef * context =
   let fname = id.id in
   if SMap.mem fname ctx.funcs then
     error ~loc:id.loc "Function %s is already defined" fname;
-  if List.mem fname [ "range"; "len"; "list" ] then
-    error ~loc:id.loc "Function %s cannot shadow a builtin function" fname;
-  let params = List.map (fun p -> p.id) idl in
-  let unique_params = List.sort_uniq String.compare params in
-  if List.length params <> List.length unique_params then
-    error "Function paramteres must be unique";
-  let ts, _ = type_stmt ctx stmt in
-  let fn_params = List.map (fun id -> { v_name = id.id; v_ofs = 0 }) idl in
+  if List.mem fname [ "len"; "range"; "list" ] then
+    error ~loc:id.loc "Function %s cannot shadow a built-in function" fname;
+  let param_names = List.map (fun p -> p.id) params in
+  let unique_params = List.sort_uniq String.compare param_names in
+  if List.length param_names <> List.length unique_params then
+    error "Function parameters must be unique";
+  (* Assign TAny to all parameters *)
+  let param_types = List.map (fun _ -> TAny) params in
+  let func_type = (param_types, TAny) in
+  let ctx = { ctx with funcs = SMap.add fname func_type ctx.funcs } in
+  let env_body =
+    { vars =
+        List.fold_left2
+          (fun vars param param_type -> SMap.add param.id param_type vars)
+          ctx.vars
+          params
+          param_types
+    ; funcs = ctx.funcs
+    }
+  in
+  let t_body, _ = type_stmt env_body body in
+  let fn_params = List.map (fun id -> { v_name = id.id; v_ofs = 0 }) params in
   let fn = { fn_name = fname; fn_params } in
-  ( (fn, ts)
-  , { vars = ctx.vars
-    ; funcs = SMap.add fname (List.map (fun _ -> TAny) idl, TAny) ctx.funcs
-    } )
+  ((fn, t_body), ctx)
 
 let rec type_file ctx (dl, s) : tdef list =
-  let ts, ctx' = type_stmt ctx s in
-  let main = [ ({ fn_name = "main"; fn_params = [] }, ts) ] in
   let rec type_defs ctx defs =
     match defs with
     | [] -> ([], ctx)
@@ -235,9 +216,11 @@ let rec type_file ctx (dl, s) : tdef list =
       let t_rest, ctx'' = type_defs ctx' rest in
       (t_def :: t_rest, ctx'')
   in
-  let tds, _ = type_defs ctx' dl in
+  let tds, ctx' = type_defs ctx dl in
+  let ts, _ = type_stmt ctx' s in
+  let main = [ ({ fn_name = "main"; fn_params = [] }, ts) ] in
   main @ tds
 
 let file ?debug:(b = false) (p : Ast.file) : Ast.tfile =
   debug := b;
-  type_file { vars = SMap.empty; funcs = SMap.empty } p
+  type_file native_ctx p
