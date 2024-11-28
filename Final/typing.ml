@@ -13,6 +13,7 @@ type typ =
   | TInt
   | TList
   | TAny
+  | TRange
 
 module SMap = Map.Make (String)
 
@@ -26,9 +27,9 @@ let native_ctx =
   { vars = SMap.empty
   ; funcs =
       SMap.of_list
-        [ ("len", ([ TList ], TInt))
-        ; ("range", ([ TInt ], TList))
-        ; ("list", ([ TList ], TList))
+        [ ("len", ([ TAny ], TInt))
+        ; ("range", ([ TAny ], TRange))
+        ; ("list", ([ TRange ], TList))
         ]
   }
 
@@ -50,32 +51,43 @@ let rec type_expr ctx expr : texpr * typ =
     | Some t -> (TEvar { v_name = id.id; v_ofs = 0 }, t)
     | None -> error "Unbounded identifier %s" id.id)
   | Ebinop (op, e1, e2) -> (
-    let te1, t1 = type_expr ctx e1 in
-    let te2, t2 = type_expr ctx e2 in
-    match op with
-    | Bsub | Bmul | Bdiv | Bmod -> (
-      match (t1, t2) with
-      | TInt, TInt -> (TEbinop (op, te1, te2), TInt)
-      | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TAny)
-      | _, _ ->
-        error "TypeError: unsupported operand types for arithmetic operation")
-    | Badd -> (
-      (* Handle overloaded '+' operator *)
-      match (t1, t2) with
-      | TString, TString -> (TEbinop (op, te1, te2), TString)
-      | TList, TList -> (TEbinop (op, te1, te2), TList)
-      | TInt, TInt -> (TEbinop (op, te1, te2), TInt)
-      | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TAny)
-      | _, _ -> error "TypeError: unsupported operand types for '+'")
-    | Beq | Bneq ->
-      (* Equality checks can be between any types *)
-      (TEbinop (op, te1, te2), TBool)
-    | Blt | Ble | Bgt | Bge -> (
-      match (t1, t2) with
-      | TInt, TInt -> (TEbinop (op, te1, te2), TBool)
-      | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TBool)
-      | _, _ -> error "TypeError: unsupported operand types for comparison")
-    | Band | Bor -> (TEbinop (op, te1, te2), TBool))
+    if op = Band || op = Bor then (TEbinop (op, TEcst Cnone, TEcst Cnone), TBool)
+    else
+      let te1, t1 = type_expr ctx e1 in
+      let te2, t2 = type_expr ctx e2 in
+      match op with
+      | Bsub | Bmul | Bdiv | Bmod -> (
+        match (t1, t2) with
+        | TInt, TInt -> (TEbinop (op, te1, te2), TInt)
+        | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TAny)
+        | _, _ ->
+          error "TypeError: unsupported operand types for arithmetic operation")
+      | Badd -> (
+        (* Handle overloaded '+' operator *)
+        match (t1, t2) with
+        | TString, TString -> (TEbinop (op, te1, te2), TString)
+        | TList, TList -> (TEbinop (op, te1, te2), TList)
+        | TInt, TInt -> (TEbinop (op, te1, te2), TInt)
+        | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TAny)
+        | _, _ ->
+          (TEbinop (op, te1, te2), TAny)
+          (* since the binop is runtime evaluated*)
+          (* | _, _ -> error "TypeError: unsupported operand types for '+'") *))
+      | Beq | Bneq ->
+        (* Equality checks can be between any types *)
+        (TEbinop (op, te1, te2), TBool)
+      | Blt | Ble | Bgt | Bge -> (
+        match (t1, t2) with
+        | TInt, TInt
+        | TBool, TBool
+        | TBool, TInt
+        | TInt, TBool
+        | TString, TString
+        | TList, TList
+        | TAny, _
+        | _, TAny -> (TEbinop (op, te1, te2), TBool)
+        | _, _ -> error "TypeError: unsupported operand types for comparison")
+      | Band | Bor -> (TEbinop (op, te1, te2), TBool))
   | Eunop (op, e) -> (
     let te, t = type_expr ctx e in
     match op with
@@ -108,6 +120,8 @@ let rec type_expr ctx expr : texpr * typ =
           param_types
           args
       in
+      (* List.map (fun a -> let t_arg, arg_type = type_expr ctx a in t_arg) args
+         in *)
       (TEcall ({ fn_name = fname; fn_params = [] }, typed_args), ret_type)
     | None -> error ~loc:id.loc "Unbound function %s" fname)
   | Elist el ->
@@ -161,19 +175,21 @@ let rec type_stmt ctx stmt : tstmt * context =
   | Sfor (it, lst, s) ->
     let tye, t = type_expr ctx lst in
     let tys, ctx' =
-      type_stmt { vars = SMap.add it.id t ctx.vars; funcs = ctx.funcs } s
+      type_stmt { vars = SMap.add it.id TAny ctx.vars; funcs = ctx.funcs } s
     in
-    if t = TList then (TSfor ({ v_name = it.id; v_ofs = 0 }, tye, tys), ctx')
-    else error "can only iterate list"
+    (* if t = TList || t = TAny then *)
+    (TSfor ({ v_name = it.id; v_ofs = 0 }, tye, tys), ctx')
+    (* else error "can only iterate list" *)
   | Seval e ->
     let tye, _ = type_expr ctx e in
     (TSeval tye, ctx)
   | Sset (e1, e2, e3) ->
     let te1, t1 = type_expr ctx e1 in
-    if t1 <> TList then error "the variable must be a list"
+    if t1 <> TList && t1 <> TAny then error "the variable must be a list"
     else
       let te2, t2 = type_expr ctx e2 in
-      if t2 <> TInt then error "the index of an array must be an int"
+      if t2 <> TInt && t2 <> TAny then
+        error "the index of an array must be an int"
       else
         let te3, t3 = type_expr ctx e3 in
         (TSset (te1, te2, te3), ctx)

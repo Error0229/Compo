@@ -7,6 +7,9 @@ tests: minipython.exe
 	bash test -2 "dune exec ./minipython.exe"
 
 type: minipython.exe
+	cd tests-mini-python && bash test -2 ../minipython.exe
+
+vtype: minipython.exe
 	cd tests-mini-python && bash test -v2 ../minipython.exe
 
 parse: minipython.exe
