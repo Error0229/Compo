@@ -49,7 +49,7 @@ let rec type_expr ctx expr : texpr * typ =
   | Eident id -> (
     match SMap.find_opt id.id ctx.vars with
     | Some t -> (TEvar { v_name = id.id; v_ofs = 0 }, t)
-    | None -> error "Unbounded identifier %s" id.id)
+    | None -> error ~loc:id.loc "Unbounded identifier %s" id.id)
   | Ebinop (op, e1, e2) -> (
     if op = Band || op = Bor then (TEbinop (op, TEcst Cnone, TEcst Cnone), TBool)
     else
@@ -116,7 +116,7 @@ let rec type_expr ctx expr : texpr * typ =
             | TAny -> t_arg (* Accept any type *)
             | _ ->
               if arg_type = param_type || arg_type = TAny then t_arg
-              else error "Type mismatch in function arguments")
+              else error ~loc:id.loc "Type mismatch in function arguments")
           param_types
           args
       in
@@ -200,10 +200,11 @@ let type_def ctx (id, params, body) : tdef * context =
     error ~loc:id.loc "Function %s is already defined" fname;
   if List.mem fname [ "len"; "range"; "list" ] then
     error ~loc:id.loc "Function %s cannot shadow a built-in function" fname;
-  let param_names = List.map (fun p -> p.id) params in
-  let unique_params = List.sort_uniq String.compare param_names in
-  if List.length param_names <> List.length unique_params then
-    error "Function parameters must be unique";
+  List.iter
+    (fun p ->
+      if List.length (List.filter (fun p' -> p'.id = p.id) params) > 1 then
+        error ~loc:p.loc "Function parameter %s is duplicated" p.id)
+    params;
   (* Assign TAny to all parameters *)
   let param_types = List.map (fun _ -> TAny) params in
   let func_type = (param_types, TAny) in
