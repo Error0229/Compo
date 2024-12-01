@@ -1,4 +1,5 @@
 	.text
+	.globl	main
 main:
 	pushq %rbp
 	movq %rsp, %rbp
@@ -6,15 +7,21 @@ main:
 	call my_malloc
 	movq $3, 0(%rax)
 	movq $3, 8(%rax)
+	leaq 16(%rax), %rdi
+	movq $str_0, %rsi
+	movq %rax, %r12
+	call strcpy
+	movq %r12, %rax
+	movq %rax, %rdi
+	call print_value
+	xorq %rax, %rax
 end_main:
 	popq %rbp
 	ret
 my_malloc:
 	pushq %rbp
 	movq %rsp, %rbp
-	andq $-16, %rsp
 	call malloc
-	movq %rbp, %rsp
 end_my_malloc:
 	popq %rbp
 	ret
@@ -90,23 +97,23 @@ end_print_value:
 	popq %rbp
 	ret
 	.data
-
-:
-	.string "newline_str"
-%ld:
-	.string "int_fmt"
-%s:
-	.string "str_fmt"
-False:
-	.string "false_str"
-None:
-	.string "none_str"
-True:
-	.string "true_str"
-[:
-	.string "list_start"
-]:
-	.string "list_end"
-error: invalid value
-:
-	.string "error_msg"
+error_msg:
+	.string "error: invalid value\n"
+false_str:
+	.string "False"
+int_fmt:
+	.string "%ld"
+list_end:
+	.string "]"
+list_start:
+	.string "["
+newline_str:
+	.string "\n"
+none_str:
+	.string "None"
+str_0:
+	.string "foo"
+str_fmt:
+	.string "%s"
+true_str:
+	.string "True"

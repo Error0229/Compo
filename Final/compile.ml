@@ -12,18 +12,18 @@ type env =
   ; functions : (string * string) list (* Function names and their labels *)
   ; current_function : string (* Name of the current function *)
   }
-let rec compile_texpr env (expr : Ast.texpr) : X86_64.text =
+let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
   match expr with
   | TEcst cst ->
-      let code = compile_constant cst in
-      (code)
+      let env, code = compile_constant env cst in
+      (env, code)
   | TEvar var ->
       let offset = find_variable env var.v_name in
       let code = movq (ind ~ofs:offset rbp) !%rax in
-      (code)
+      (env, code)
   | _ -> failwith "TODO"
   (* ... Handle other cases ... *)
-  and compile_constant (cst : Ast.constant) : X86_64.text =
+  and compile_constant env (cst : Ast.constant) : env * X86_64.text =
   match cst with
   | Cint n ->
     (* Allocate a heap block for the integer value *)
@@ -34,7 +34,7 @@ let rec compile_texpr env (expr : Ast.texpr) : X86_64.text =
       movq (imm 2) (ind rax) ++ (* Type tag at offset 0 *)
       movq (imm64 n) (ind ~ofs:8 rax)  (* Value at offset 8 *)
     in
-    code
+    env, code
   | Cbool b ->
     (* Similar to integer, with type tag 1 and value 0 or 1 *)
     let value = if b then 1 else 0 in
@@ -44,8 +44,14 @@ let rec compile_texpr env (expr : Ast.texpr) : X86_64.text =
       movq (imm 1) (ind rax) ++  (* Type tag 1 *)
       movq (imm value) (ind ~ofs:8 rax)
     in
-    code
+    env, code
   | Cstring s ->
+    let lbl_s, env =
+    try List.assoc s env.data, env
+    with Not_found ->
+      let lbl = Util.genid "str" in
+      let env = { env with data = (s, lbl) :: env.data } in
+      lbl, env  in
     (* Allocate block with type tag 3 and store the string *)
     let len = String.length s in
     let total_size = 16 + len + 1 in  (* Type tag + length + string + null terminator *)
@@ -56,9 +62,13 @@ let rec compile_texpr env (expr : Ast.texpr) : X86_64.text =
       movq (imm len) (ind ~ofs:8 rax) ++  (* Length *)
       (* Copy the string to memory *)
       (* Implement string copying, possibly by calling strcpy *)
-      nop  (* Placeholder *)
+      leaq (ind ~ofs:16 rax) rdi ++
+      movq (ilab lbl_s) !%rsi ++
+      movq !%rax !%r12 ++
+      call "strcpy" ++
+      movq !%r12 !%rax
     in
-    code
+    env, code
   | Cnone ->
     (* None value, type tag 0 *)
     let code =
@@ -66,29 +76,29 @@ let rec compile_texpr env (expr : Ast.texpr) : X86_64.text =
       call "my_malloc" ++
       movq (imm 0) (ind rax)  (* Type tag 0 *)
     in
-    code
+    env, code
 and compile_tstmt env (stmt : Ast.tstmt) : X86_64.text * env =
-match stmt with
-| TSassign (var, expr) ->
-    (* Compile the expression *)
-    let expr_code= compile_texpr env expr in
-    (* Store the result into the variable's location *)
-    (* Update the environment with the variable offset *)
-    let offset, env = allocate_variable env var.v_name in
-    let code =
-      expr_code ++
-      movq !%rax (ind ~ofs:offset rbp)
-    in
-    (code, env)
-| TSreturn expr ->
-    let expr_code= compile_texpr env expr in
-    let code =
-      expr_code ++
-      jmp ("end_" ^ env.current_function)
-    in
-    (code, env)
+  match stmt with
+  | TSassign (var, expr) ->
+      (* Compile the expression *)
+      let env, expr_code= compile_texpr env expr in
+      (* Store the result into the variable's location *)
+      (* Update the environment with the variable offset *)
+      let offset, env = allocate_variable env var.v_name in
+      let code =
+        expr_code ++
+        movq !%rax (ind ~ofs:offset rbp)
+      in
+      (code, env)
+  | TSreturn expr ->
+      let env, expr_code= compile_texpr env expr in
+      let code =
+        expr_code ++
+        jmp ("end_" ^ env.current_function)
+      in
+      (code, env)
   | TSif (cond_expr, then_stmt, else_stmt) ->
-  let cond_code = compile_texpr env cond_expr in
+  let env, cond_code = compile_texpr env cond_expr in
   let then_code, _ = compile_tstmt env then_stmt in
   let else_code, _ = compile_tstmt env else_stmt in
   (* Generate labels *)
@@ -109,25 +119,38 @@ match stmt with
 | TSblock stmts ->
   (* Compile each statement in the block *)
 ( 
-  List.fold_left (fun acc s ->
-    let  cstmt, _ = compile_tstmt env s in
-      acc ++ cstmt) nop stmts
-, env)
+  let code , env=
+  List.fold_left (fun (acc_code, acc_env) s ->
+    let cstmt, new_env = compile_tstmt acc_env s in
+      (acc_code ++ cstmt, new_env)
+      ) (nop, env) stmts in
+    (code, env))
 | TSprint expr ->
   (* Compile the expression *)
-  let expr_code = compile_texpr env expr in
+  let env, expr_code = compile_texpr env expr in
+  (* print_data env.data; *)
   (* Generate code to print the value *)
-  expr_code, env
+( 
+  expr_code ++
+  movq !%rax !%rdi ++ 
+    call "print_value"
+ ), env
+
   (* Placeholder: Need to implement print logic *)
 | _ ->
   failwith "Statement not yet implemented" 
 (* ... Handle other cases ... *)
-
+and print_data data = 
+  print_endline "🗿<===========>🗿";
+  List.iter (fun (s, l) -> print_endline ("Data: " ^ s ^ " 🤔 " ^ l ))data
 and compile_tdef env ((fn, body) : Ast.tdef) : X86_64.text * env =
   let fn_label = fn.fn_name in
   let env = { env with current_function = fn_label } in
   (* Set up initial environment for the function *)
   let env, param_setup = setup_parameters env fn.fn_params in
+  let ret_0 =
+    xorq !%rax !%rax
+  in
   let prologue = 
     label fn_label ++
     pushq !%rbp ++
@@ -136,6 +159,7 @@ and compile_tdef env ((fn, body) : Ast.tdef) : X86_64.text * env =
   in
   (* Compile the function body *)
   let body_code, env = compile_tstmt env body in
+  (* print_data env.data; *)
   (* Epilogue label for returns *)
   let epilogue_label = "end_" ^ fn_label in
   let epilogue = 
@@ -143,7 +167,7 @@ and compile_tdef env ((fn, body) : Ast.tdef) : X86_64.text * env =
     popq rbp ++
     ret
   in
-  (prologue ++ body_code ++ epilogue, env)
+  (prologue ++ body_code ++ (if fn_label = "main" then ret_0 else nop) ++ epilogue, env)
 
   (* Function to generate the data section from env.data *)
 and generate_data_section (data_items : (string * label) list) : X86_64.data =
@@ -178,7 +202,7 @@ and compile_tfile (tdefs : Ast.tfile) : X86_64.program =
   let data_section = generate_data_section unique_data_items in
 
   {
-    text = List.fold_left (++) nop !text_sections ++ bi; 
+    text = globl "main" ++ List.fold_left (++) nop !text_sections ++ bi; 
     data = data_section;
   }
 
@@ -187,7 +211,7 @@ and compile_tfile (tdefs : Ast.tfile) : X86_64.program =
 and compile_function_call env (fn : Ast.fn) (args : Ast.texpr list) : X86_64.text * env =
   (* Evaluate arguments in reverse order and push onto stack *)
   let arg_code, env = List.fold_right (fun arg (code, env) ->
-    let arg_code = compile_texpr env arg in
+    let env, arg_code = compile_texpr env arg in
     (code ++ arg_code ++ pushq !%rax, env)
   ) args (nop, env) in
   (* Find the function label *)
@@ -253,9 +277,9 @@ and builtins env : env * X86_64.text =
   
   let my_malloc = (
     prologue "my_malloc" ++
-    andq (imm (-16)) !%rsp ++
+    (* andq (imm (-16)) !%rsp ++ *)
     call "malloc" ++
-    movq !%rbp !%rsp ++
+    (* movq !%rbp !%rsp ++ *)
     epilogue "my_malloc"
   )
 in 
@@ -266,19 +290,19 @@ in
 in 
   let print_value = 
   prologue "print_value" ++
-  movq !%rdi !%r8 ++    (* 保存要打印的值到 %r8 *)
-  movq (ind r8) !%r9 ++ (* 读取类型标签到 %r9 *)
-  cmpq (imm 0) !%r9 ++  (* 检查是否为 None *)
+  movq !%rdi !%r8 ++    (* save value to r8*)  
+  movq (ind r8) !%r9 ++ (* save type tag to r9 *)
+  cmpq (imm 0) !%r9 ++  (* None *)
   je "print_none" ++
-  cmpq (imm 1) !%r9 ++  (* 检查是否为布尔值 *)
+  cmpq (imm 1) !%r9 ++  (* Bool *)
   je "print_bool" ++
-  cmpq (imm 2) !%r9 ++  (* 检查是否为整数 *)
+  cmpq (imm 2) !%r9 ++  (* Int *)
   je "print_int" ++
-  cmpq (imm 3) !%r9 ++  (* 检查是否为字符串 *)
+  cmpq (imm 3) !%r9 ++  (* Str *)
   je "print_string" ++
-  cmpq (imm 4) !%r9 ++  (* 检查是否为列表 *)
+  cmpq (imm 4) !%r9 ++  (* List *)
   je "print_list" ++
-  (* 未知类型，打印错误信息 *)
+  (* Print error*)
   label "print_error" ++
   movq (ilab "error_msg") !%rdi ++
   xorq !%rax !%rax ++
@@ -286,16 +310,14 @@ in
   movq (imm 1) !%rdi ++
   call "exit" ++
 
-  (* 打印 None *)
   label "print_none" ++
   movq (ilab "none_str") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
   jmp "print_newline" ++
 
-  (* 打印布尔值 *)
   label "print_bool" ++
-  movq (ind ~ofs:8 r8) !%r10 ++  (* 读取布尔值 *)
+  movq (ind ~ofs:8 r8) !%r10 ++  (* load value *)
   cmpq (imm 0) !%r10 ++
   je "print_false" ++
   label "print_true" ++
@@ -309,32 +331,29 @@ in
   call "printf" ++
   jmp "print_newline" ++
 
-  (* 打印整数 *)
   label "print_int" ++
-  movq (ind ~ofs:8 r8) !%rsi ++  (* 读取整数值 *)
+  movq (ind ~ofs:8 r8) !%rsi ++  (* Load Int*)
   movq (ilab "int_fmt") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
   jmp "print_newline" ++
 
-  (* 打印字符串 *)
   label "print_string" ++
-  leaq (ind ~ofs:16 r8) rsi ++  (* 获取字符串数据的地址 *)
+  leaq (ind ~ofs:16 r8) rsi ++  (* Load String *)
   movq (ilab "str_fmt") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
   jmp "print_newline" ++
 
-  (* 打印列表（简化处理） *)
   label "print_list" ++
   movq (ilab "list_start") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
-  (* 此处可以实现列表元素的递归打印 *)
-  movq (ind ~ofs:8 r8) !%r10 ++  (* 读取列表长度 *)
+
+  movq (ind ~ofs:8 r8) !%r10 ++  (* Load List length *)
   cmpq (imm 0) !%r10 ++
   je "print_list_end" ++
-  (* 为简化，暂不实现非空列表的打印 *)
+
   label "print_list_end" ++
   movq (ilab "list_end") !%rdi ++
   xorq !%rax !%rax ++
@@ -347,17 +366,16 @@ in
   call "printf" ++
   epilogue "print_value"
 in 
-  (* 数据段的字符串常量 *)
   let data_items = [
-    ("none_str", "None");
-    ("true_str", "True");
-    ("false_str", "False");
-    ("int_fmt", "%ld");
-    ("str_fmt", "%s");
-    ("error_msg", "error: invalid value\n");
-    ("newline_str", "\n");
-    ("list_start", "[");
-    ("list_end", "]")
+    ("None", "none_str");
+    ("True", "true_str");
+    ("False", "false_str");
+    ("%ld", "int_fmt");
+    ("%s","str_fmt");
+    ("error: invalid value\n", "error_msg");
+    ("\n", "newline_str");
+    ( "[", "list_start");
+    ( "]", "list_end")
   ] in
   let env = { env with data = env.data @ data_items } in
   (env, my_malloc ++ len ++ print_value)
