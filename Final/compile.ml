@@ -12,63 +12,7 @@ type env =
   ; functions : (string * string) list (* Function names and their labels *)
   ; current_function : string (* Name of the current function *)
   }
-  let rec compile_tstmt env (stmt : Ast.tstmt) : X86_64.text * env =
-  match stmt with
-  | TSassign (var, expr) ->
-      (* Compile the expression *)
-      let expr_code= compile_texpr env expr in
-      (* Store the result into the variable's location *)
-      (* Update the environment with the variable offset *)
-      let offset, env = allocate_variable env var.v_name in
-      let code =
-        expr_code ++
-        movq !%rax (ind ~ofs:offset rbp)
-      in
-      (code, env)
-  | TSreturn expr ->
-      let expr_code= compile_texpr env expr in
-      let code =
-        expr_code ++
-        jmp ("end_" ^ env.current_function)
-      in
-      (code, env)
-   | TSif (cond_expr, then_stmt, else_stmt) ->
-    let cond_code = compile_texpr env cond_expr in
-    let then_code, _ = compile_tstmt env then_stmt in
-    let else_code, _ = compile_tstmt env else_stmt in
-    (* Generate labels *)
-    let label_else = Util.genid "else"in
-    let label_end = Util.genid "endif" in
-    (cond_code ++
-    (* Evaluate condition and jump to else if false *)
-    (* Assuming condition result in %rax *)
-    cmpq (imm 0) !%rax ++
-    je label_else ++
-    (* Then branch *)
-    then_code ++
-    jmp label_end ++
-    (* Else branch *)
-    label label_else ++
-    else_code ++
-    label label_end, env)
-  | TSblock stmts ->
-    (* Compile each statement in the block *)
-( 
-    List.fold_left (fun acc s ->
-      let  cstmt, _ = compile_tstmt env s in
-       acc ++ cstmt) nop stmts
- , env)
-  | TSprint expr ->
-    (* Compile the expression *)
-    let expr_code = compile_texpr env expr in
-    (* Generate code to print the value *)
-    expr_code, env
-    (* Placeholder: Need to implement print logic *)
-  | _ ->
-    failwith "Statement not yet implemented" 
-  (* ... Handle other cases ... *)
-
-and compile_texpr env (expr : Ast.texpr) : X86_64.text =
+let rec compile_texpr env (expr : Ast.texpr) : X86_64.text =
   match expr with
   | TEcst cst ->
       let code = compile_constant cst in
@@ -123,7 +67,61 @@ and compile_texpr env (expr : Ast.texpr) : X86_64.text =
       movq (imm 0) (ind rax)  (* Type tag 0 *)
     in
     code
-
+and compile_tstmt env (stmt : Ast.tstmt) : X86_64.text * env =
+match stmt with
+| TSassign (var, expr) ->
+    (* Compile the expression *)
+    let expr_code= compile_texpr env expr in
+    (* Store the result into the variable's location *)
+    (* Update the environment with the variable offset *)
+    let offset, env = allocate_variable env var.v_name in
+    let code =
+      expr_code ++
+      movq !%rax (ind ~ofs:offset rbp)
+    in
+    (code, env)
+| TSreturn expr ->
+    let expr_code= compile_texpr env expr in
+    let code =
+      expr_code ++
+      jmp ("end_" ^ env.current_function)
+    in
+    (code, env)
+  | TSif (cond_expr, then_stmt, else_stmt) ->
+  let cond_code = compile_texpr env cond_expr in
+  let then_code, _ = compile_tstmt env then_stmt in
+  let else_code, _ = compile_tstmt env else_stmt in
+  (* Generate labels *)
+  let label_else = Util.genid "else"in
+  let label_end = Util.genid "endif" in
+  (cond_code ++
+  (* Evaluate condition and jump to else if false *)
+  (* Assuming condition result in %rax *)
+  cmpq (imm 0) !%rax ++
+  je label_else ++
+  (* Then branch *)
+  then_code ++
+  jmp label_end ++
+  (* Else branch *)
+  label label_else ++
+  else_code ++
+  label label_end, env)
+| TSblock stmts ->
+  (* Compile each statement in the block *)
+( 
+  List.fold_left (fun acc s ->
+    let  cstmt, _ = compile_tstmt env s in
+      acc ++ cstmt) nop stmts
+, env)
+| TSprint expr ->
+  (* Compile the expression *)
+  let expr_code = compile_texpr env expr in
+  (* Generate code to print the value *)
+  expr_code, env
+  (* Placeholder: Need to implement print logic *)
+| _ ->
+  failwith "Statement not yet implemented" 
+(* ... Handle other cases ... *)
 
 and compile_tdef env ((fn, body) : Ast.tdef) : X86_64.text * env =
   let fn_label = fn.fn_name in
@@ -166,7 +164,7 @@ and compile_tfile (tdefs : Ast.tfile) : X86_64.program =
     functions = functions;
     current_function = "";
   } in
-
+  let env, bi = builtins env in
   (* Compile each function *)
   List.iter (fun tdef ->
     let fn_code, env = compile_tdef env tdef in
@@ -180,7 +178,7 @@ and compile_tfile (tdefs : Ast.tfile) : X86_64.program =
   let data_section = generate_data_section unique_data_items in
 
   {
-    text = List.fold_left (++) nop !text_sections;
+    text = List.fold_left (++) nop !text_sections ++ bi; 
     data = data_section;
   }
 
@@ -219,11 +217,10 @@ and allocate_variable env var_name =
     } in
     (offset, env)
 
-  and find_variable env var_name =
+and find_variable env var_name =
   try List.assoc var_name env.locals
   with Not_found -> failwith ("Variable not found: " ^ var_name)
-and 
- setup_parameters env (params : Ast.var list) : env * X86_64.text =
+and setup_parameters env (params : Ast.var list) : env * X86_64.text =
   let env = { env with locals = []; next_offset = -8;} in  (* Start at -8(%rbp) *)
   let code, env = List.fold_left (fun (code, env) param ->
     let offset = env.next_offset in
@@ -241,7 +238,129 @@ and
   ) (nop, env) params in
   (env, code)
 
+and builtins env : env * X86_64.text = 
+  let prologue fname= 
+    label fname ++
+    pushq !%rbp ++
+    movq !%rsp !%rbp
+  in
+  (* Epilogue label for returns *)
+  let epilogue fname = 
+    label ("end_" ^ fname) ++
+    popq rbp ++
+    ret
+  in
+  
+  let my_malloc = (
+    prologue "my_malloc" ++
+    andq (imm (-16)) !%rsp ++
+    call "malloc" ++
+    movq !%rbp !%rsp ++
+    epilogue "my_malloc"
+  )
+in 
+  let len = (
+    (* check parameter type is list *) 
+  nop
+  )
+in 
+  let print_value = 
+  prologue "print_value" ++
+  movq !%rdi !%r8 ++    (* 保存要打印的值到 %r8 *)
+  movq (ind r8) !%r9 ++ (* 读取类型标签到 %r9 *)
+  cmpq (imm 0) !%r9 ++  (* 检查是否为 None *)
+  je "print_none" ++
+  cmpq (imm 1) !%r9 ++  (* 检查是否为布尔值 *)
+  je "print_bool" ++
+  cmpq (imm 2) !%r9 ++  (* 检查是否为整数 *)
+  je "print_int" ++
+  cmpq (imm 3) !%r9 ++  (* 检查是否为字符串 *)
+  je "print_string" ++
+  cmpq (imm 4) !%r9 ++  (* 检查是否为列表 *)
+  je "print_list" ++
+  (* 未知类型，打印错误信息 *)
+  label "print_error" ++
+  movq (ilab "error_msg") !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf" ++
+  movq (imm 1) !%rdi ++
+  call "exit" ++
 
+  (* 打印 None *)
+  label "print_none" ++
+  movq (ilab "none_str") !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf" ++
+  jmp "print_newline" ++
+
+  (* 打印布尔值 *)
+  label "print_bool" ++
+  movq (ind ~ofs:8 r8) !%r10 ++  (* 读取布尔值 *)
+  cmpq (imm 0) !%r10 ++
+  je "print_false" ++
+  label "print_true" ++
+  movq (ilab "true_str") !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf" ++
+  jmp "print_newline" ++
+  label "print_false" ++
+  movq (ilab "false_str") !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf" ++
+  jmp "print_newline" ++
+
+  (* 打印整数 *)
+  label "print_int" ++
+  movq (ind ~ofs:8 r8) !%rsi ++  (* 读取整数值 *)
+  movq (ilab "int_fmt") !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf" ++
+  jmp "print_newline" ++
+
+  (* 打印字符串 *)
+  label "print_string" ++
+  leaq (ind ~ofs:16 r8) rsi ++  (* 获取字符串数据的地址 *)
+  movq (ilab "str_fmt") !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf" ++
+  jmp "print_newline" ++
+
+  (* 打印列表（简化处理） *)
+  label "print_list" ++
+  movq (ilab "list_start") !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf" ++
+  (* 此处可以实现列表元素的递归打印 *)
+  movq (ind ~ofs:8 r8) !%r10 ++  (* 读取列表长度 *)
+  cmpq (imm 0) !%r10 ++
+  je "print_list_end" ++
+  (* 为简化，暂不实现非空列表的打印 *)
+  label "print_list_end" ++
+  movq (ilab "list_end") !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf" ++
+  jmp "print_newline" ++
+
+  label "print_newline" ++
+  movq (ilab "newline_str") !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf" ++
+  epilogue "print_value"
+in 
+  (* 数据段的字符串常量 *)
+  let data_items = [
+    ("none_str", "None");
+    ("true_str", "True");
+    ("false_str", "False");
+    ("int_fmt", "%ld");
+    ("str_fmt", "%s");
+    ("error_msg", "error: invalid value\n");
+    ("newline_str", "\n");
+    ("list_start", "[");
+    ("list_end", "]")
+  ] in
+  let env = { env with data = env.data @ data_items } in
+  (env, my_malloc ++ len ++ print_value)
 
 (* let setup_parameters (params : Ast.var list) : env * X86_64.text = *)
 (* let rec compile_texpr (ctx : env) (expr : Ast.texpr) : X86_64.text = *)
@@ -250,6 +369,7 @@ and
 (* let compile_tfile (ctx : env) (tdefs : Ast.tfile) : X86_64.program = *)
 and file ?debug:(b = false) (p : Ast.tfile) : X86_64.program =
   debug := b;
-  { text = globl "main" ++ label "main" ++ ret; (* TODO *)
-                                                data = nop }
+  compile_tfile p
+  (* { text = globl "main" ++ label "main" ++ ret; (* TODO *)
+                                                data = nop } *)
 (* TODO *)
