@@ -21,6 +21,60 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
       let offset = find_variable env var.v_name in
       let code = movq (ind ~ofs:offset rbp) !%rax in
       (env, code)
+  | TElist l ->
+  ( 
+  let lp =  
+      movq (imm ( ( List.length l ) * 8 + 16 ) ) !%rdi ++      (* Size of the block *)
+      call "my_malloc" ++       (* %rax has pointer to new block *)
+      movq !%rax !%r12 ++
+      movq (imm 4) (ind r12) ++ (* Type tag at offset 0 *)
+      movq (imm (List.length l)) (ind ~ofs:8 r12)(* Type tag at offset 0 *)
+  in
+  let code , env, _=
+  List.fold_left (fun (acc_code, acc_env, ith) s ->
+    let new_env, cexpr = compile_texpr acc_env s in
+      (acc_code ++ 
+      cexpr ++
+      movq !%rax (ind ~ofs:((ith+2)*8) r12)
+      , new_env, ith + 1)
+      ) (nop, env, 0) l in
+    (env, pushq !%r12 ++
+    lp ++ 
+    code ++ 
+    movq !%r12 !%rax ++
+    popq r12
+    ))
+
+  | TEbinop (op, e1, e2) ->
+    (
+      match op with
+      | Badd ->
+        let env, v1 = compile_texpr env e1 in
+        let env, v2 = compile_texpr env e2 in
+        (env, 
+        v1 ++ 
+        movq !%rax !%r12 ++
+        v2 ++
+        movq !%rax !%rsi ++
+        movq !%r12 !%rdi ++
+        call "Badd")
+
+      | Bsub
+      | Bmul
+      | Bdiv
+      | Bmod  (** + - * // % *)
+      | Beq
+      | Bneq
+      | Blt
+      | Ble
+      | Bgt
+      | Bge  (** == != < <= > >= *)
+      | Band
+      | Bor  (** and or *)
+        ->
+          failwith "TODO"
+    )
+
   | _ -> failwith "TODO"
   (* ... Handle other cases ... *)
   and compile_constant env (cst : Ast.constant) : env * X86_64.text =
@@ -56,6 +110,7 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
     let len = String.length s in
     let total_size = 16 + len + 1 in  (* Type tag + length + string + null terminator *)
     let code =
+      pushq !%r12 ++
       movq (imm total_size) !%rdi ++
       call "my_malloc" ++
       movq (imm 3) (ind rax) ++           (* Type tag 3 *)
@@ -66,7 +121,8 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
       movq (ilab lbl_s) !%rsi ++
       movq !%rax !%r12 ++
       call "strcpy" ++
-      movq !%r12 !%rax
+      movq !%r12 !%rax ++
+      popq r12
     in
     env, code
   | Cnone ->
@@ -134,6 +190,7 @@ and compile_tstmt env (stmt : Ast.tstmt) : X86_64.text * env =
   expr_code ++
   movq !%rax !%rdi ++ 
     call "print_value"
+    ++ call "print_newline"
  ), env
 
   (* Placeholder: Need to implement print logic *)
@@ -261,25 +318,34 @@ and setup_parameters env (params : Ast.var list) : env * X86_64.text =
     (code, env)
   ) (nop, env) params in
   (env, code)
-
-and builtins env : env * X86_64.text = 
-  let prologue fname= 
+and prologue fname= 
     label fname ++
     pushq !%rbp ++
+    pushq !%rbx ++
+    pushq !%r12 ++ 
+    pushq !%r13 ++ 
+    pushq !%r14 ++ 
+    pushq !%r15 ++ 
     movq !%rsp !%rbp
-  in
+and
   (* Epilogue label for returns *)
-  let epilogue fname = 
+epilogue fname = 
     label ("end_" ^ fname) ++
+    popq r15 ++
+    popq r14 ++
+    popq r13 ++
+    popq r12 ++
+    popq rbx ++
     popq rbp ++
     ret
-  in
+
+and builtins env : env * X86_64.text = 
   
   let my_malloc = (
     prologue "my_malloc" ++
-    (* andq (imm (-16)) !%rsp ++ *)
+    andq (imm (-16)) !%rsp ++
     call "malloc" ++
-    (* movq !%rbp !%rsp ++ *)
+    movq !%rbp !%rsp ++
     epilogue "my_malloc"
   )
 in 
@@ -314,7 +380,7 @@ in
   movq (ilab "none_str") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
-  jmp "print_newline" ++
+  jmp "end_print" ++
 
   label "print_bool" ++
   movq (ind ~ofs:8 r8) !%r10 ++  (* load value *)
@@ -324,46 +390,72 @@ in
   movq (ilab "true_str") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
-  jmp "print_newline" ++
+  jmp "end_print" ++
   label "print_false" ++
   movq (ilab "false_str") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
-  jmp "print_newline" ++
+  jmp "end_print" ++
 
   label "print_int" ++
   movq (ind ~ofs:8 r8) !%rsi ++  (* Load Int*)
   movq (ilab "int_fmt") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
-  jmp "print_newline" ++
+  jmp "end_print" ++
 
   label "print_string" ++
   leaq (ind ~ofs:16 r8) rsi ++  (* Load String *)
   movq (ilab "str_fmt") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
-  jmp "print_newline" ++
+  jmp "end_print" ++
 
   label "print_list" ++
+  movq !%r8 !%r14 ++
+  movq (ind ~ofs:8 r14) !%r12 ++   (* %r10 = list length *)
+  movq (imm 0) !%r13 ++           (* %r11 = index i *)
   movq (ilab "list_start") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
-
-  movq (ind ~ofs:8 r8) !%r10 ++  (* Load List length *)
-  cmpq (imm 0) !%r10 ++
-  je "print_list_end" ++
-
+  label "print_list_loop" ++
+  cmpq !%r12 !%r13 ++
+  je "print_list_end" ++          (* if i == n jmp to end*)
+  cmpq (imm 0) !%r13 ++
+  je "skip_comma" ++
+  movq (ilab "comma_space") !%rdi ++
+  xorq !%rax !%rax ++
+  call "printf" ++
+  label "skip_comma" ++
+  leaq (ind ~ofs:16 r14) rsi ++     (* %rsi = list start address *)
+  movq !%r13 !%rcx ++             (* %rcx = i *)
+  imulq (imm 8) !%rcx ++          (* %rcx = i * 8 *)
+  addq !%rcx !%rsi ++             (* %rsi = current index*)
+  movq (ind rsi) !%rdi ++         (* %rdi = current *)
+  pushq !%r8 ++
+  pushq !%r9 ++
+  pushq !%r10 ++
+  pushq !%r11 ++
+  call "print_value" ++
+  popq r11 ++
+  popq r10 ++
+  popq r9 ++
+  popq r8 ++
+  incq !%r13 ++ (* i++ *)
+  jmp "print_list_loop" ++
   label "print_list_end" ++
   movq (ilab "list_end") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
-  jmp "print_newline" ++
+  jmp "end_print" ++
 
   label "print_newline" ++
   movq (ilab "newline_str") !%rdi ++
   xorq !%rax !%rax ++
   call "printf" ++
+  ret ++
+  
+  label "end_print" ++
   epilogue "print_value"
 in 
   let data_items = [
@@ -373,12 +465,97 @@ in
     ("%ld", "int_fmt");
     ("%s","str_fmt");
     ("error: invalid value\n", "error_msg");
+    ("error: invalid type for '+' operand", "add_error_msg");
     ("\n", "newline_str");
     ( "[", "list_start");
-    ( "]", "list_end")
+    ( "]", "list_end");
+    (", ", "comma_space")
   ] in
+ let inline_Badd = 
+  prologue "Badd" ++
+  subq ( imm 64 ) !%rsp ++
+  inline "
+inline_Badd:
+  movq 0(%rdi), %r9
+  movq 0(%rsi), %r10
+  cmpq %r9, %r10
+  jne add_error
+  cmpq $2, %r9
+  je add_int
+  cmpq $3, %r9
+  je add_string
+  cmpq $4, %r9
+  je add_list
+add_error:
+  movq $add_error_msg, %rdi
+  xorq %rax, %rax
+  call printf
+  movq $1, %rdi
+  call exit
+add_int:
+  movq 8(%rdi), %r9
+  movq 8(%rsi), %r10
+  addq %r9, %r10
+  movq %rdi, %rax
+  movq %r10, 8(%rax)
+  jmp end_inline_Badd
+add_string:
+  movq 8(%rdi), %r8
+  movq 8(%rsi), %r9
+  addq %r8, %r9
+  movq %r9, -24(%rbp)  # new size
+  movq %rdi, -16(%rbp) # first string
+  leaq 16(%rdi), %rdi
+  leaq 16(%rsi), %rsi
+  call strcat
+  movq %rax, -32(%rbp) # new string
+  movq -24(%rbp), %rdi
+  call my_malloc
+	movq $3, 0(%rax) # type tag
+  movq -24(%rbp), %rsi
+  movq %rsi, 8(%rax)
+  movq %rax, %r12
+  leaq 16(%rax), %rdi
+  movq -32(%rbp), %rsi 
+  call strcpy
+  movq %r12, %rax
+  jmp end_inline_Badd
+add_list:
+  movq %rdi, %r13
+  movq %rsi, %r14
+  movq 8(%r13), %r9
+  movq 8(%r14), %r10
+  movq %r9, %r11
+  addq %r10, %r11
+  movq %r11, %rcx
+  imulq $8, %rcx
+  addq $16, %rcx
+  movq %rcx, %rdi
+  call my_malloc
+  movq %rax, %r12
+  movq $4, 0(%r12)
+  movq %r11, 8(%r12)
+  movq %r9, %rcx
+  imulq $8, %rcx
+  leaq 16(%r13), %rsi
+  leaq 16(%r12), %rdi
+  movq %rcx, %rdx
+  call memcpy
+  movq %r10, %rcx
+  imulq $8, %rcx
+  leaq 16(%r14), %rsi
+  leaq 16(%r12,%r9,8), %rdi
+  movq %rcx, %rdx
+  call memcpy
+  movq %r12, %rax
+  jmp end_inline_Badd
+end_inline_Badd:
+        " ++
+        addq (imm64 64L) !%rsp++
+        epilogue "Badd"
+ in 
   let env = { env with data = env.data @ data_items } in
-  (env, my_malloc ++ len ++ print_value)
+  (env, my_malloc ++ len ++ print_value ++ inline_Badd)
 
 (* let setup_parameters (params : Ast.var list) : env * X86_64.text = *)
 (* let rec compile_texpr (ctx : env) (expr : Ast.texpr) : X86_64.text = *)

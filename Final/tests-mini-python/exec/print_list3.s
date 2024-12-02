@@ -4,14 +4,40 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	pushq %r12
-	movq $29, %rdi
+	movq $40, %rdi
 	call my_malloc
-	movq $3, 0(%rax)
-	movq $12, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_0, %rsi
 	movq %rax, %r12
-	call strcpy
+	movq $4, 0(%r12)
+	movq $3, 8(%r12)
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
+	movq %rax, 16(%r12)
+	pushq %r12
+	movq $32, %rdi
+	call my_malloc
+	movq %rax, %r12
+	movq $4, 0(%r12)
+	movq $2, 8(%r12)
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $2, 8(%rax)
+	movq %rax, 16(%r12)
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $3, 8(%rax)
+	movq %rax, 24(%r12)
+	movq %r12, %rax
+	popq %r12
+	movq %rax, 24(%r12)
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $4, 8(%rax)
+	movq %rax, 32(%r12)
 	movq %r12, %rax
 	popq %r12
 	movq %rax, %rdi
@@ -261,8 +287,6 @@ newline_str:
 	.string "\n"
 none_str:
 	.string "None"
-str_0:
-	.string "hello, world"
 str_fmt:
 	.string "%s"
 true_str:

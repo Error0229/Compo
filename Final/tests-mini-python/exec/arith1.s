@@ -3,17 +3,18 @@
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	pushq %r12
-	movq $29, %rdi
+	movq $16, %rdi
 	call my_malloc
-	movq $3, 0(%rax)
-	movq $12, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_0, %rsi
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
 	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $2, 8(%rax)
+	movq %rax, %rsi
+	movq %r12, %rdi
+	call Badd
 	movq %rax, %rdi
 	call print_value
 	call print_newline
@@ -261,8 +262,6 @@ newline_str:
 	.string "\n"
 none_str:
 	.string "None"
-str_0:
-	.string "hello, world"
 str_fmt:
 	.string "%s"
 true_str:
