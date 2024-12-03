@@ -58,13 +58,13 @@ print_value:
 print_error:
 	movq $error_msg, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 	movq $1, %rdi
 	call exit
 print_none:
 	movq $none_str, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 	jmp end_print
 print_bool:
 	movq 8(%r8), %r10
@@ -73,24 +73,24 @@ print_bool:
 print_true:
 	movq $true_str, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 	jmp end_print
 print_false:
 	movq $false_str, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 	jmp end_print
 print_int:
 	movq 8(%r8), %rsi
 	movq $int_fmt, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 	jmp end_print
 print_string:
 	leaq 16(%r8), %rsi
 	movq $str_fmt, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 	jmp end_print
 print_list:
 	movq %r8, %r14
@@ -98,7 +98,7 @@ print_list:
 	movq $0, %r13
 	movq $list_start, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 print_list_loop:
 	cmpq %r12, %r13
 	je print_list_end
@@ -106,7 +106,7 @@ print_list_loop:
 	je skip_comma
 	movq $comma_space, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 skip_comma:
 	leaq 16(%r14), %rsi
 	movq %r13, %rcx
@@ -127,12 +127,12 @@ skip_comma:
 print_list_end:
 	movq $list_end, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 	jmp end_print
 print_newline:
 	movq $newline_str, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 	ret
 end_print:
 end_print_value:
@@ -237,6 +237,13 @@ end_Badd:
 	popq %rbx
 	popq %rbp
 	ret
+  
+my_printf:
+  movq %rsp, %rbp
+  andq $-16, %rsp 
+  call printf
+  movq %rbp, %rsp
+  ret
 	.data
 add_error_msg:
 	.string "error: invalid type for '+' operand"

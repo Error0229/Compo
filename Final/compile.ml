@@ -340,7 +340,16 @@ epilogue fname =
     ret
 
 and builtins env : env * X86_64.text = 
-  
+  let my_printf = (
+inline "  
+my_printf:
+  movq %rsp, %rbp
+  andq $-16, %rsp 
+  call printf
+  movq %rbp, %rsp
+  ret
+"
+  )  in
   let my_malloc = (
     prologue "my_malloc" ++
     andq (imm (-16)) !%rsp ++
@@ -372,14 +381,14 @@ in
   label "print_error" ++
   movq (ilab "error_msg") !%rdi ++
   xorq !%rax !%rax ++
-  call "printf" ++
+  call "my_printf" ++
   movq (imm 1) !%rdi ++
   call "exit" ++
 
   label "print_none" ++
   movq (ilab "none_str") !%rdi ++
   xorq !%rax !%rax ++
-  call "printf" ++
+  call "my_printf" ++
   jmp "end_print" ++
 
   label "print_bool" ++
@@ -389,26 +398,26 @@ in
   label "print_true" ++
   movq (ilab "true_str") !%rdi ++
   xorq !%rax !%rax ++
-  call "printf" ++
+  call "my_printf" ++
   jmp "end_print" ++
   label "print_false" ++
   movq (ilab "false_str") !%rdi ++
   xorq !%rax !%rax ++
-  call "printf" ++
+  call "my_printf" ++
   jmp "end_print" ++
 
   label "print_int" ++
   movq (ind ~ofs:8 r8) !%rsi ++  (* Load Int*)
   movq (ilab "int_fmt") !%rdi ++
   xorq !%rax !%rax ++
-  call "printf" ++
+  call "my_printf" ++
   jmp "end_print" ++
 
   label "print_string" ++
   leaq (ind ~ofs:16 r8) rsi ++  (* Load String *)
   movq (ilab "str_fmt") !%rdi ++
   xorq !%rax !%rax ++
-  call "printf" ++
+  call "my_printf" ++
   jmp "end_print" ++
 
   label "print_list" ++
@@ -417,7 +426,7 @@ in
   movq (imm 0) !%r13 ++           (* %r11 = index i *)
   movq (ilab "list_start") !%rdi ++
   xorq !%rax !%rax ++
-  call "printf" ++
+  call "my_printf" ++
   label "print_list_loop" ++
   cmpq !%r12 !%r13 ++
   je "print_list_end" ++          (* if i == n jmp to end*)
@@ -425,7 +434,7 @@ in
   je "skip_comma" ++
   movq (ilab "comma_space") !%rdi ++
   xorq !%rax !%rax ++
-  call "printf" ++
+  call "my_printf" ++
   label "skip_comma" ++
   leaq (ind ~ofs:16 r14) rsi ++     (* %rsi = list start address *)
   movq !%r13 !%rcx ++             (* %rcx = i *)
@@ -446,13 +455,13 @@ in
   label "print_list_end" ++
   movq (ilab "list_end") !%rdi ++
   xorq !%rax !%rax ++
-  call "printf" ++
+  call "my_printf" ++
   jmp "end_print" ++
 
   label "print_newline" ++
   movq (ilab "newline_str") !%rdi ++
   xorq !%rax !%rax ++
-  call "printf" ++
+  call "my_printf" ++
   ret ++
   
   label "end_print" ++
@@ -555,7 +564,7 @@ end_inline_Badd:
         epilogue "Badd"
  in 
   let env = { env with data = env.data @ data_items } in
-  (env, my_malloc ++ len ++ print_value ++ inline_Badd)
+  (env, my_malloc ++ len ++ print_value ++ inline_Badd ++ my_printf)
 
 (* let setup_parameters (params : Ast.var list) : env * X86_64.text = *)
 (* let rec compile_texpr (ctx : env) (expr : Ast.texpr) : X86_64.text = *)

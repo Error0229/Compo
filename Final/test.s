@@ -3,6 +3,7 @@
 main:
 	pushq %rbp
 	movq %rsp, %rbp
+	pushq %r12
 	movq $28, %rdi
 	call my_malloc
 	movq $3, 0(%rax)
@@ -12,8 +13,10 @@ main:
 	movq %rax, %r12
 	call strcpy
 	movq %r12, %rax
+	popq %r12
 	movq %rax, %rdi
 	call print_value
+	call print_newline
 	xorq %rax, %rax
 end_main:
 	popq %rbp
@@ -60,14 +63,14 @@ print_value:
 print_error:
 	movq $error_msg, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 	movq $1, %rdi
 	call exit
 print_none:
 	movq $none_str, %rdi
 	xorq %rax, %rax
-	call printf
-	jmp print_newline
+	call my_printf
+	jmp end_print
 print_bool:
 	movq 8(%r8), %r10
 	cmpq $0, %r10
@@ -75,42 +78,43 @@ print_bool:
 print_true:
 	movq $true_str, %rdi
 	xorq %rax, %rax
-	call printf
-	jmp print_newline
+	call my_printf
+	jmp end_print
 print_false:
 	movq $false_str, %rdi
 	xorq %rax, %rax
-	call printf
-	jmp print_newline
+	call my_printf
+	jmp end_print
 print_int:
 	movq 8(%r8), %rsi
 	movq $int_fmt, %rdi
 	xorq %rax, %rax
-	call printf
-	jmp print_newline
+	call my_printf
+	jmp end_print
 print_string:
 	leaq 16(%r8), %rsi
 	movq $str_fmt, %rdi
 	xorq %rax, %rax
-	call printf
-	jmp print_newline
+	call my_printf
+	jmp end_print
 print_list:
-	movq 8(%r8), %r10
-	movq $0, %r11
+	movq %r8, %r14
+	movq 8(%r14), %r12
+	movq $0, %r13
 	movq $list_start, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 print_list_loop:
-	cmpq %r10, %r11
+	cmpq %r12, %r13
 	je print_list_end
-	cmpq $0, %r11
+	cmpq $0, %r13
 	je skip_comma
 	movq $comma_space, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
 skip_comma:
-	leaq 16(%r8), %rsi
-	movq %r11, %rcx
+	leaq 16(%r14), %rsi
+	movq %r13, %rcx
 	imulq $8, %rcx
 	addq %rcx, %rsi
 	movq 0(%rsi), %rdi
@@ -123,17 +127,19 @@ skip_comma:
 	popq %r10
 	popq %r9
 	popq %r8
-	incq %r11
+	incq %r13
 	jmp print_list_loop
 print_list_end:
 	movq $list_end, %rdi
 	xorq %rax, %rax
-	call printf
-	jmp print_newline
+	call my_printf
+	jmp end_print
 print_newline:
 	movq $newline_str, %rdi
 	xorq %rax, %rax
-	call printf
+	call my_printf
+	ret
+end_print:
 end_print_value:
 	popq %r15
 	popq %r14
@@ -236,6 +242,12 @@ end_Badd:
 	popq %rbx
 	popq %rbp
 	ret
+  
+my_printf:
+  subq $8, %rsp 
+  call printf
+  addq $8, %rsp
+  ret
 	.data
 add_error_msg:
 	.string "error: invalid type for '+' operand"
