@@ -60,12 +60,7 @@ print_value:
 	je print_string
 	cmpq $4, %r9
 	je print_list
-print_error:
-	movq $error_msg, %rdi
-	xorq %rax, %rax
-	call my_printf
-	movq $1, %rdi
-	call exit
+	jmp fail_add
 print_none:
 	movq $none_str, %rdi
 	xorq %rax, %rax
@@ -148,6 +143,26 @@ end_print_value:
 	popq %rbx
 	popq %rbp
 	ret
+fail_mul:
+	movq $mul_error_msg, %rdi
+	jmp print_error
+fail_mod:
+	movq $mod_error_msg, %rdi
+	jmp print_error
+fail_add:
+	movq $add_error_msg, %rdi
+	jmp print_error
+fail_div:
+	movq $div_error_msg, %rdi
+	jmp print_error
+fail_sub:
+	movq $sub_error_msg, %rdi
+	jmp print_error
+print_error:
+	xorq %rax, %rax
+	call my_printf
+	movq $1, %rdi
+	call exit
 Badd:
 	pushq %rbp
 	pushq %rbx
@@ -162,19 +177,14 @@ inline_Badd:
   movq 0(%rdi), %r9
   movq 0(%rsi), %r10
   cmpq %r9, %r10
-  jne add_error
+  jne fail_add
   cmpq $2, %r9
   je add_int
   cmpq $3, %r9
   je add_string
   cmpq $4, %r9
   je add_list
-add_error:
-  movq $add_error_msg, %rdi
-  xorq %rax, %rax
-  call printf
-  movq $1, %rdi
-  call exit
+  jmp fail_add
 add_int:
   movq 8(%rdi), %r9
   movq 8(%rsi), %r10
@@ -244,15 +254,18 @@ end_Badd:
 	ret
   
 my_printf:
-  subq $8, %rsp 
+  movq %rsp, %rbp
+  andq $-16, %rsp 
   call printf
-  addq $8, %rsp
+  movq %rbp, %rsp
   ret
 	.data
 add_error_msg:
 	.string "error: invalid type for '+' operand"
 comma_space:
 	.string ", "
+div_error_msg:
+	.string "error: invalid type for '/' operand"
 error_msg:
 	.string "error: invalid value\n"
 false_str:
@@ -263,6 +276,10 @@ list_end:
 	.string "]"
 list_start:
 	.string "["
+mod_error_msg:
+	.string "error: invalid type for '%' operand"
+mul_error_msg:
+	.string "error: invalid type for '*' operand"
 newline_str:
 	.string "\n"
 none_str:
@@ -271,5 +288,7 @@ str_0:
 	.string "hello world"
 str_fmt:
 	.string "%s"
+sub_error_msg:
+	.string "error: invalid type for '-' operand"
 true_str:
 	.string "True"

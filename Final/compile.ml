@@ -46,23 +46,54 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
     ))
 
   | TEbinop (op, e1, e2) ->
-    (
+    ( 
+      let env, v1 = compile_texpr env e1 in
+      let env, v2 = compile_texpr env e2 in
       match op with
       | Badd ->
-        let env, v1 = compile_texpr env e1 in
-        let env, v2 = compile_texpr env e2 in
-        (env, 
+(  env,
         v1 ++ 
         movq !%rax !%r12 ++
         v2 ++
         movq !%rax !%rsi ++
         movq !%r12 !%rdi ++
-        call "Badd")
-
-      | Bsub
+        call "Badd"
+)
       | Bmul
       | Bdiv
       | Bmod  (** + - * // % *)
+      | Bsub -> 
+        let err_msgs = 
+        let h = Hashtbl.create 32 in
+        List.iter (fun (s, tok) -> Hashtbl.add h s tok)
+          [Bmul, "fail_mul"; Bdiv, "fail_div"; Bmod, "fail_mod";
+          Bsub, "fail_sub";];
+        fun s -> try Hashtbl.find h s with Not_found ->  "🤷" in
+        let operations = 
+        let h = Hashtbl.create 32 in
+        List.iter (fun (s, tok) -> Hashtbl.add h s tok)
+          [Bmul, imulq !%rcx !%rax; Bdiv, cqto ++ idivq !%rcx ; Bmod, cqto ++ idivq !%rcx ++ movq !%rdx !%rax;
+          Bsub, subq !%rcx !%rax
+;];
+        fun s -> try Hashtbl.find h s with Not_found ->  label "🤷" in
+
+      env,  
+        v1 ++ 
+        pushq !%rax ++
+        v2 ++
+        popq r8 ++
+        movq !%rax !%r9 ++
+        movq (ind r8) !%rax ++ (* v1 *)
+        movq (ind r9) !%rcx ++ (* v2 *)
+        cmpq !%rax !%rcx ++
+        jne ( err_msgs op ) ++
+        cmpq (imm 2) !%rax ++
+        jne ( err_msgs op ) ++
+        movq (ind ~ofs:8 r8) !%rax ++
+        movq (ind ~ofs:8 r9) !%rcx ++
+        ( operations op ) ++
+        movq !%rax (ind ~ofs:8 r8) ++
+        movq !%r8 !%rax
       | Beq
       | Bneq
       | Blt
@@ -377,13 +408,9 @@ in
   je "print_string" ++
   cmpq (imm 4) !%r9 ++  (* List *)
   je "print_list" ++
+
+  jmp "fail_add" ++
   (* Print error*)
-  label "print_error" ++
-  movq (ilab "error_msg") !%rdi ++
-  xorq !%rax !%rax ++
-  call "my_printf" ++
-  movq (imm 1) !%rdi ++
-  call "exit" ++
 
   label "print_none" ++
   movq (ilab "none_str") !%rdi ++
@@ -465,7 +492,34 @@ in
   ret ++
   
   label "end_print" ++
-  epilogue "print_value"
+  epilogue "print_value" ++
+
+  label "fail_mul" ++
+  movq (ilab "mul_error_msg") !%rdi ++
+  jmp "print_error" ++
+
+  label "fail_mod" ++
+  movq (ilab "mod_error_msg") !%rdi ++
+  jmp "print_error" ++
+
+  label "fail_add" ++
+  movq (ilab "add_error_msg") !%rdi ++
+  jmp "print_error" ++
+
+  label "fail_div" ++
+  movq (ilab "div_error_msg") !%rdi ++
+  jmp "print_error" ++
+
+  label "fail_sub" ++
+  movq (ilab "sub_error_msg") !%rdi ++
+  jmp "print_error" ++
+
+  label "print_error" ++
+  xorq !%rax !%rax ++
+  call "my_printf" ++
+  movq (imm 1) !%rdi ++
+  call "exit"
+
 in 
   let data_items = [
     ("None", "none_str");
@@ -474,6 +528,10 @@ in
     ("%ld", "int_fmt");
     ("%s","str_fmt");
     ("error: invalid value\n", "error_msg");
+    ("error: invalid type for '-' operand", "sub_error_msg");
+    ("error: invalid type for '*' operand", "mul_error_msg");
+    ("error: invalid type for '%' operand", "mod_error_msg");
+    ("error: invalid type for '/' operand", "div_error_msg");
     ("error: invalid type for '+' operand", "add_error_msg");
     ("\n", "newline_str");
     ( "[", "list_start");
@@ -488,19 +546,14 @@ inline_Badd:
   movq 0(%rdi), %r9
   movq 0(%rsi), %r10
   cmpq %r9, %r10
-  jne add_error
+  jne fail_add
   cmpq $2, %r9
   je add_int
   cmpq $3, %r9
   je add_string
   cmpq $4, %r9
   je add_list
-add_error:
-  movq $add_error_msg, %rdi
-  xorq %rax, %rax
-  call printf
-  movq $1, %rdi
-  call exit
+  jmp fail_add
 add_int:
   movq 8(%rdi), %r9
   movq 8(%rsi), %r10

@@ -6,9 +6,25 @@ main:
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $42, 8(%rax)
-	movq %rax, -16(%rbp)
-	movq -16(%rbp), %rax
+	movq $2, 8(%rax)
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $3, 8(%rax)
+	popq %r8
+	movq %rax, %r9
+	movq 0(%r8), %rax
+	movq 0(%r9), %rcx
+	cmpq %rax, %rcx
+	jne fail_mul
+	cmpq $2, %rax
+	jne fail_mul
+	movq 8(%r8), %rax
+	movq 8(%r9), %rcx
+	imulq %rcx, %rax
+	movq %rax, 8(%r8)
+	movq %r8, %rax
 	movq %rax, %rdi
 	call print_value
 	call print_newline
