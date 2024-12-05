@@ -99,7 +99,20 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
       | Blt
       | Ble
       | Bgt
-      | Bge  (** == != < <= > >= *)
+      | Bge  (** == != < <= > >= *) ->
+        let operations = 
+        let h = Hashtbl.create 32 in
+        List.iter (fun (s, tok) -> Hashtbl.add h s tok)
+          [Beq, "Beq"; Bneq, "Bneq"; Blt, "Blt"; 
+          Ble, "Ble"; Bgt, "Bgt"; Bge, "Bge";];
+        fun s -> try Hashtbl.find h s with Not_found -> "🤷" in
+      env,  
+        v1 ++ 
+        pushq !%rax ++
+        v2 ++
+        popq rdi ++
+        movq !%rax !%rsi ++
+        call (operations op)
       | Band
       | Bor  (** and or *)
         ->
@@ -533,6 +546,7 @@ in
     ("error: invalid type for '%' operand", "mod_error_msg");
     ("error: invalid type for '/' operand", "div_error_msg");
     ("error: invalid type for '+' operand", "add_error_msg");
+    ("error: invalid comparison", "cmp_error_msg");
     ("\n", "newline_str");
     ( "[", "list_start");
     ( "]", "list_end");
@@ -616,8 +630,250 @@ end_inline_Badd:
         addq (imm64 64L) !%rsp++
         epilogue "Badd"
  in 
+let cmps =
+inline "
+  # Input: %rdi = x, %rsi = y
+# Output: %rax = min(x, y)
+min:
+    mov %rdi, %rax        # Move x into %rax (result register)
+    cmp %rsi, %rdi        # Compare y with x
+    cmovg %rsi, %rax      # If y < x (greater flag not set), move y into %rax
+    ret                   # Return result
+" ++
+ prologue "Beq" ++
+
+      movq !%rdi !%r8 ++
+      movq !%rsi !%r9 ++
+      movq (ind r8) !%rax ++ (* v1 *)
+      movq (ind r9) !%rcx ++ (* v2 *)
+      cmpq !%rax !%rcx ++
+      jne "fail_cmp" ++
+      movq (ind r8) !%r10 ++ (* save type tag to r10 *)
+      cmpq (imm 0) !%r10 ++  (* None *)
+      je "eq_none_bool_int" ++
+      cmpq (imm 1) !%r10 ++  (* Bool *)
+      je "eq_none_bool_int" ++
+      cmpq (imm 2) !%r10 ++  (* Int *)
+      je "eq_none_bool_int" ++
+      cmpq (imm 3) !%r10 ++  (* Str *)
+      je "eq_string" ++
+      cmpq (imm 4) !%r10 ++  (* List *)
+      je "eq_list" ++
+
+      label "eq_none_bool_int" ++
+      movq (ind ~ofs:8 r8) !%rax ++
+      movq (ind ~ofs:8 r9) !%rcx ++
+
+      cmpq !%rax !%rcx ++
+      je "eq_ret_true" ++
+      jmp "eq_ret_false" ++
+
+      label "eq_string" ++
+      leaq (ind ~ofs:16 r8) rdi ++
+      leaq (ind ~ofs:16 r9) rsi ++
+      call "strcmp" ++
+      cmpl (imm 0) !%eax ++
+      je "eq_ret_true" ++
+      jmp "eq_ret_false" ++
+
+      label "eq_list" ++
+      movq (ind ~ofs:8 r8) !%rax ++
+      movq (ind ~ofs:8 r9) !%r11 ++
+      cmpq !%rax !%r11 ++
+      jne "eq_ret_false" ++
+      leaq (ind ~ofs:16 r8) r12 ++     (* %rdi = list start address *)
+      leaq (ind ~ofs:16 r9) r13 ++     (* %rsi = list start address *)
+
+      movq (imm 0) !%r10 ++ (* i = 0 *)
+
+      label "eq_list_loop" ++
+      cmpq !%r11 !%r10 ++
+      je "eq_ret_true" ++
+
+
+      movq (ind ~index: r10 ~scale:8 r12) !%rdi++ (* rdi = rdi[r10] *)
+      movq (ind ~index: r10 ~scale:8 r13) !%rsi++ (* rsi = rsi[r10] *)
+
+      movq (ind rdi) !%rax ++
+      cmpq (ind rsi) !%rax ++
+      jne "eq_ret_false" ++
+
+      pushq !%r10 ++
+      pushq !%r11 ++
+
+      call "Beq" ++
+
+      popq r11 ++
+      popq r10 ++
+
+      movq (ind ~ofs:8 rax) !%rax ++
+      cmpq (imm 1) !%rax ++
+      jne "eq_ret_false" ++
+      incq !%r10 ++
+      jmp "eq_list_loop" ++
+
+      label "eq_ret_true" ++
+      movq (imm 16) !%rdi ++      (* Size of the block *)
+      call "my_malloc" ++       (* %rax has pointer to new block *)
+      movq (imm 1) (ind rax) ++ (* Type tag at offset 0 *)
+      movq (imm 1) (ind ~ofs:8 rax) ++ (* Value at offset 8 *)
+      jmp "eq_end" ++
+      
+      label "eq_ret_false" ++
+      movq (imm 16) !%rdi ++      (* Size of the block *)
+      call "my_malloc" ++       (* %rax has pointer to new block *)
+      movq (imm 1) (ind rax) ++ (* Type tag at offset 0 *)
+      movq (imm 0) (ind ~ofs:8 rax) ++ (* Value at offset 8 *)
+
+      label "eq_end" ++      
+ epilogue "Beq" ++
+
+ prologue "Bgt" ++
+
+      movq !%rdi !%r14 ++
+      movq !%rsi !%r15 ++
+      movq (ind r14) !%rax ++ (* v1 *)
+      movq (ind r15) !%rcx ++ (* v2 *)
+      cmpq !%rax !%rcx ++
+      jne "fail_cmp" ++
+      movq (ind r14) !%r10 ++ (* save type tag to r10 *)
+      cmpq (imm 0) !%r10 ++  (* None *)
+      je "gt_none_bool_int" ++
+      cmpq (imm 1) !%r10 ++  (* Bool *)
+      je "gt_none_bool_int" ++
+      cmpq (imm 2) !%r10 ++  (* Int *)
+      je "gt_none_bool_int" ++
+      cmpq (imm 3) !%r10 ++  (* Str *)
+      je "gt_string" ++
+      cmpq (imm 4) !%r10 ++  (* List *)
+      je "gt_list" ++
+
+      label "gt_none_bool_int" ++
+      movq (ind ~ofs:8 r14) !%rax ++
+      movq (ind ~ofs:8 r15) !%rcx ++
+
+      cmpq !%rcx !%rax ++
+      jg "gt_ret_true" ++
+      jmp "gt_ret_false" ++
+
+      label "gt_string" ++
+      leaq (ind ~ofs:16 r14) rdi ++
+      leaq (ind ~ofs:16 r15) rsi ++
+      call "strcmp" ++
+      cmpl (imm 0) !%eax ++
+      jg "gt_ret_true" ++
+      jmp "gt_ret_false" ++
+
+      label "gt_list" ++
+      movq (ind ~ofs:8 r14) !%rdi ++
+      movq (ind ~ofs:8 r15) !%rsi ++
+      call "min" ++
+      movq !%rax !%r11 ++ (* r11 = min (l1.len, l2.len)*)
+      leaq (ind ~ofs:16 r14) r12 ++     (* %rdi = list start address *)
+      leaq (ind ~ofs:16 r15) r13 ++     (* %rsi = list start address *)
+
+      movq (imm 0) !%r10 ++ (* i = 0 *)
+
+      label "gt_list_loop" ++
+      cmpq !%r11 !%r10 ++
+      je "end_gt_list_loop" ++
+
+
+      movq (ind ~index: r10 ~scale:8 r12) !%rdi++ (* rdi = rdi[r10] *)
+      movq (ind ~index: r10 ~scale:8 r13) !%rsi++ (* rsi = rsi[r10] *)
+
+      movq (ind rdi) !%rax ++
+      cmpq (ind rsi) !%rax ++
+      jne "fail_cmp" ++
+
+      pushq !%r10 ++
+      pushq !%r11 ++
+
+      call "Bgt" ++
+
+      popq r11 ++
+      popq r10 ++
+
+      movq (ind ~ofs:8 rax) !%rax ++
+      cmpq (imm 1) !%rax ++ (* if not true jump to false *)
+      jne "gt_ret_false" ++
+      incq !%r10 ++
+      jmp "gt_list_loop" ++
+
+      label "end_gt_list_loop" ++
+      movq (ind ~ofs:8 r14) !%rdi ++
+      movq (ind ~ofs:8 r15) !%rsi ++
+
+      cmpq !%rsi !%rdi ++ (* l1.len <= l2.len*)
+      jle "gt_ret_false" ++ 
+
+      label "gt_ret_true" ++
+      movq (imm 16) !%rdi ++      (* Size of the block *)
+      call "my_malloc" ++       (* %rax has pointer to new block *)
+      movq (imm 1) (ind rax) ++ (* Type tag at offset 0 *)
+      movq (imm 1) (ind ~ofs:8 rax) ++ (* Value at offset 8 *)
+      jmp "gt_end" ++
+      
+      label "gt_ret_false" ++
+      movq (imm 16) !%rdi ++      (* Size of the block *)
+      call "my_malloc" ++       (* %rax has pointer to new block *)
+      movq (imm 1) (ind rax) ++ (* Type tag at offset 0 *)
+      movq (imm 0) (ind ~ofs:8 rax) ++ (* Value at offset 8 *)
+
+      label "gt_end" ++      
+ epilogue "Bgt" ++
+
+ prologue "Bge" ++
+ pushq !%rdi ++
+ pushq !%rsi ++
+  call "Bgt" ++
+  popq rsi ++
+  popq rdi ++
+  movq (ind ~ofs: 8 rax) !%r12 ++
+  call "Beq" ++
+  movq (ind ~ofs: 8 rax) !%r13 ++
+
+  orq !%r12 !%r13 ++
+  movq !%r13  (ind ~ofs: 8 rax) ++
+
+ epilogue "Bge" ++
+ 
+ prologue "Blt" ++
+
+  call "Bge" ++
+  movq (ind ~ofs: 8 rax) !%r12 ++
+  xorq (imm 1) !%r12 ++
+  movq !%r12  (ind ~ofs: 8 rax) ++
+
+ epilogue "Blt" ++
+
+ prologue "Ble" ++
+  call "Bgt" ++
+  movq (ind ~ofs: 8 rax) !%r12 ++
+  xorq (imm 1) !%r12 ++
+  movq !%r12  (ind ~ofs: 8 rax) ++
+
+ epilogue "Ble" ++
+
+
+ prologue "Bneq" ++
+  call "Beq" ++
+  movq (ind ~ofs: 8 rax) !%r12 ++
+  xorq (imm 1) !%r12 ++
+  movq !%r12  (ind ~ofs: 8 rax) ++
+ epilogue "Bneq" ++
+  
+  prologue "Bcmp" ++
+    label "fail_cmp" ++
+    movq (ilab "cmp_error_msg") !%rdi ++
+    xorq !%rax !%rax ++
+    call "my_printf" ++
+    movq (imm 1) !%rdi ++
+    call "exit" ++
+epilogue "Bcmp"
+in
   let env = { env with data = env.data @ data_items } in
-  (env, my_malloc ++ len ++ print_value ++ inline_Badd ++ my_printf)
+  (env, my_malloc ++ len ++ print_value ++ inline_Badd ++ my_printf ++ cmps )
 
 (* let setup_parameters (params : Ast.var list) : env * X86_64.text = *)
 (* let rec compile_texpr (ctx : env) (expr : Ast.texpr) : X86_64.text = *)

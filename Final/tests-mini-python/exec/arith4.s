@@ -272,9 +272,300 @@ my_printf:
   call printf
   movq %rbp, %rsp
   ret
+
+  # Input: %rdi = x, %rsi = y
+# Output: %rax = min(x, y)
+min:
+    mov %rdi, %rax        # Move x into %rax (result register)
+    cmp %rsi, %rdi        # Compare y with x
+    cmovg %rsi, %rax      # If y < x (greater flag not set), move y into %rax
+    ret                   # Return result
+Beq:
+	pushq %rbp
+	pushq %rbx
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	movq %rsp, %rbp
+	movq %rdi, %r8
+	movq %rsi, %r9
+	movq 0(%r8), %rax
+	movq 0(%r9), %rcx
+	cmpq %rax, %rcx
+	jne fail_cmp
+	movq 0(%r8), %r10
+	cmpq $0, %r10
+	je eq_none_bool_int
+	cmpq $1, %r10
+	je eq_none_bool_int
+	cmpq $2, %r10
+	je eq_none_bool_int
+	cmpq $3, %r10
+	je eq_string
+	cmpq $4, %r10
+	je eq_list
+eq_none_bool_int:
+	movq 8(%r8), %rax
+	movq 8(%r9), %rcx
+	cmpq %rax, %rcx
+	je eq_ret_true
+	jmp eq_ret_false
+eq_string:
+	leaq 16(%r8), %rdi
+	leaq 16(%r9), %rsi
+	call strcmp
+	cmpl $0, %eax
+	je eq_ret_true
+	jmp eq_ret_false
+eq_list:
+	movq 8(%r8), %rax
+	movq 8(%r9), %r11
+	cmpq %rax, %r11
+	jne eq_ret_false
+	leaq 16(%r8), %r12
+	leaq 16(%r9), %r13
+	movq $0, %r10
+eq_list_loop:
+	cmpq %r11, %r10
+	je eq_ret_true
+	movq 0(%r12,%r10,8), %rdi
+	movq 0(%r13,%r10,8), %rsi
+	movq 0(%rdi), %rax
+	cmpq 0(%rsi), %rax
+	jne eq_ret_false
+	pushq %r10
+	pushq %r11
+	call Beq
+	popq %r11
+	popq %r10
+	movq 8(%rax), %rax
+	cmpq $1, %rax
+	jne eq_ret_false
+	incq %r10
+	jmp eq_list_loop
+eq_ret_true:
+	movq $16, %rdi
+	call my_malloc
+	movq $1, 0(%rax)
+	movq $1, 8(%rax)
+	jmp eq_end
+eq_ret_false:
+	movq $16, %rdi
+	call my_malloc
+	movq $1, 0(%rax)
+	movq $0, 8(%rax)
+eq_end:
+end_Beq:
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %rbx
+	popq %rbp
+	ret
+Bgt:
+	pushq %rbp
+	pushq %rbx
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	movq %rsp, %rbp
+	movq %rdi, %r14
+	movq %rsi, %r15
+	movq 0(%r14), %rax
+	movq 0(%r15), %rcx
+	cmpq %rax, %rcx
+	jne fail_cmp
+	movq 0(%r14), %r10
+	cmpq $0, %r10
+	je gt_none_bool_int
+	cmpq $1, %r10
+	je gt_none_bool_int
+	cmpq $2, %r10
+	je gt_none_bool_int
+	cmpq $3, %r10
+	je gt_string
+	cmpq $4, %r10
+	je gt_list
+gt_none_bool_int:
+	movq 8(%r14), %rax
+	movq 8(%r15), %rcx
+	cmpq %rcx, %rax
+	jg gt_ret_true
+	jmp gt_ret_false
+gt_string:
+	leaq 16(%r14), %rdi
+	leaq 16(%r15), %rsi
+	call strcmp
+	cmpl $0, %eax
+	jg gt_ret_true
+	jmp gt_ret_false
+gt_list:
+	movq 8(%r14), %rdi
+	movq 8(%r15), %rsi
+	call min
+	movq %rax, %r11
+	leaq 16(%r14), %r12
+	leaq 16(%r15), %r13
+	movq $0, %r10
+gt_list_loop:
+	cmpq %r11, %r10
+	je end_gt_list_loop
+	movq 0(%r12,%r10,8), %rdi
+	movq 0(%r13,%r10,8), %rsi
+	movq 0(%rdi), %rax
+	cmpq 0(%rsi), %rax
+	jne fail_cmp
+	pushq %r10
+	pushq %r11
+	call Bgt
+	popq %r11
+	popq %r10
+	movq 8(%rax), %rax
+	cmpq $1, %rax
+	jne gt_ret_false
+	incq %r10
+	jmp gt_list_loop
+end_gt_list_loop:
+	movq 8(%r14), %rdi
+	movq 8(%r15), %rsi
+	cmpq %rsi, %rdi
+	jle gt_ret_false
+gt_ret_true:
+	movq $16, %rdi
+	call my_malloc
+	movq $1, 0(%rax)
+	movq $1, 8(%rax)
+	jmp gt_end
+gt_ret_false:
+	movq $16, %rdi
+	call my_malloc
+	movq $1, 0(%rax)
+	movq $0, 8(%rax)
+gt_end:
+end_Bgt:
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %rbx
+	popq %rbp
+	ret
+Bge:
+	pushq %rbp
+	pushq %rbx
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	movq %rsp, %rbp
+	pushq %rdi
+	pushq %rsi
+	call Bgt
+	popq %rsi
+	popq %rdi
+	movq 8(%rax), %r12
+	call Beq
+	movq 8(%rax), %r13
+	orq %r12, %r13
+	movq %r13, 8(%rax)
+end_Bge:
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %rbx
+	popq %rbp
+	ret
+Blt:
+	pushq %rbp
+	pushq %rbx
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	movq %rsp, %rbp
+	call Bge
+	movq 8(%rax), %r12
+	xorq $1, %r12
+	movq %r12, 8(%rax)
+end_Blt:
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %rbx
+	popq %rbp
+	ret
+Ble:
+	pushq %rbp
+	pushq %rbx
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	movq %rsp, %rbp
+	call Bgt
+	movq 8(%rax), %r12
+	xorq $1, %r12
+	movq %r12, 8(%rax)
+end_Ble:
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %rbx
+	popq %rbp
+	ret
+Bneq:
+	pushq %rbp
+	pushq %rbx
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	movq %rsp, %rbp
+	call Beq
+	movq 8(%rax), %r12
+	xorq $1, %r12
+	movq %r12, 8(%rax)
+end_Bneq:
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %rbx
+	popq %rbp
+	ret
+Bcmp:
+	pushq %rbp
+	pushq %rbx
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	movq %rsp, %rbp
+fail_cmp:
+	movq $cmp_error_msg, %rdi
+	xorq %rax, %rax
+	call my_printf
+	movq $1, %rdi
+	call exit
+end_Bcmp:
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	popq %rbx
+	popq %rbp
+	ret
 	.data
 add_error_msg:
 	.string "error: invalid type for '+' operand"
+cmp_error_msg:
+	.string "error: invalid comparison"
 comma_space:
 	.string ", "
 div_error_msg:

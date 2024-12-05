@@ -6,7 +6,15 @@ main:
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $42, 8(%rax)
+	movq $1, 8(%rax)
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $2, 8(%rax)
+	popq %rdi
+	movq %rax, %rsi
+	call Beq
 	movq %rax, %rdi
 	call print_value
 	call print_newline
