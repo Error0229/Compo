@@ -33,6 +33,20 @@ let native_ctx =
         ]
   }
 
+let built_in_defs =
+  SMap.fold
+    (fun fname (param_types, ret_type) acc ->
+      let fn_params =
+        List.mapi
+          (fun i _ -> { v_name = Printf.sprintf "arg%d" i; v_ofs = 0 })
+          param_types
+      in
+      let fn = { fn_name = fname; fn_params } in
+      let fn_body = TSblock [] in
+      (fn, fn_body) :: acc)
+    native_ctx.funcs
+    []
+
 (* use the following function to signal typing errors, e.g. error ~loc "unbound
    variable %s" id *)
 let error ?(loc = dummy_loc) f =

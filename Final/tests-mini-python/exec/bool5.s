@@ -78,6 +78,22 @@ end_my_malloc:
 	popq %rbx
 	popq %rbp
 	ret
+len:
+	pushq %rbp
+	pushq %r12
+	movq %rsp, %rbp
+	movq 24(%rbp), %r12
+	movq 0(%r12), %rdi
+	cmpq $4, %rdi
+	jne fail_func_call
+	movq 8(%r12), %r12
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq %r12, 8(%rax)
+	popq %r12
+	popq %rbp
+	ret
 print_value:
 	pushq %rbp
 	pushq %rbx
@@ -196,6 +212,9 @@ fail_div:
 fail_sub:
 	movq $sub_error_msg, %rdi
 	jmp print_error
+fail_func_call:
+	movq $func_error_msg, %rdi
+	jmp print_error
 print_error:
 	xorq %rax, %rax
 	call my_printf
@@ -236,50 +255,64 @@ add_string:
   addq %r8, %r9
   movq %r9, -24(%rbp)  # new size
   movq %rdi, -16(%rbp) # first string
-  leaq 16(%rdi), %rdi
-  leaq 16(%rsi), %rsi
-  call strcat
-  movq %rax, -32(%rbp) # new string
+  pushq %rdi
+  pushq %rsi
   movq -24(%rbp), %rdi
+  pushq %r9
   call my_malloc
+  popq %r9
+  popq %rsi
+  popq %rdi
 	movq $3, 0(%rax) # type tag
-  movq -24(%rbp), %rsi
-  movq %rsi, 8(%rax)
-  movq %rax, %r12
-  leaq 16(%rax), %rdi
-  movq -32(%rbp), %rsi 
-  call strcpy
+  movq %r9, 8(%rax)  
+  movq %rax, %r12 
+
+  pushq %rsi 
+  pushq %rdi 
+
+  leaq 16(%rdi), %rsi
+  leaq 16(%r12), %rdi  
+  call strcat
+
+  popq %rdi
+  popq %rsi
+
+  leaq 16(%r12), %rdi  
+  leaq 16(%rsi), %rsi
+
+  call strcat
+
   movq %r12, %rax
-  jmp end_inline_Badd
-add_list:
-  movq %rdi, %r13
-  movq %rsi, %r14
-  movq 8(%r13), %r9
-  movq 8(%r14), %r10
-  movq %r9, %r11
-  addq %r10, %r11
-  movq %r11, %rcx
-  imulq $8, %rcx
-  addq $16, %rcx
-  movq %rcx, %rdi
-  call my_malloc
-  movq %rax, %r12
-  movq $4, 0(%r12)
-  movq %r11, 8(%r12)
-  movq %r9, %rcx
-  imulq $8, %rcx
-  leaq 16(%r13), %rsi
-  leaq 16(%r12), %rdi
-  movq %rcx, %rdx
-  call memcpy
-  movq %r10, %rcx
-  imulq $8, %rcx
-  leaq 16(%r14), %rsi
-  leaq 16(%r12,%r9,8), %rdi
-  movq %rcx, %rdx
-  call memcpy
-  movq %r12, %rax
-  jmp end_inline_Badd
+
+  jmp end_inline_Badd 
+  add_list:
+	movq %rdi, %r13
+	movq %rsi, %r14
+	movq 8(%r13), %r9
+	movq 8(%r14), %r10
+	movq %r9, %r15
+	addq %r10, %r15
+	movq %r15, %rcx
+	imulq $8, %rcx
+	addq $16, %rcx
+	movq %rcx, %rdi
+	call my_malloc
+	movq %rax, %r12
+	movq $4, 0(%r12)
+	movq %r15, 8(%r12)
+	leaq 16(%r13), %rsi
+	leaq 16(%r12), %rdi
+	movq 8(%r13), %rdx
+	imulq $8, %rdx
+	call memcpy
+	leaq 16(%r14), %rsi
+	leaq 16(%r12,%r9,8), %rdi
+	movq 8(%r14), %rdx
+	imulq $8, %rdx
+	call memcpy
+	movq %r12, %rax
+
+jmp end_inline_Badd
 end_inline_Badd:
         	addq $64, %rsp
 end_Badd:
@@ -615,6 +648,8 @@ error_msg:
 	.string "error: invalid value\n"
 false_str:
 	.string "False"
+func_error_msg:
+	.string "error: fail to call function for whatever reason"
 int_fmt:
 	.string "%ld"
 list_end:
