@@ -51,43 +51,41 @@ let rec type_expr ctx expr : texpr * typ =
     | Some t -> (TEvar { v_name = id.id; v_ofs = 0 }, t)
     | None -> error ~loc:id.loc "Unbounded identifier %s" id.id)
   | Ebinop (op, e1, e2) -> (
-    if op = Band || op = Bor then (TEbinop (op, TEcst Cnone, TEcst Cnone), TBool)
-    else
-      let te1, t1 = type_expr ctx e1 in
-      let te2, t2 = type_expr ctx e2 in
-      match op with
-      | Bsub | Bmul | Bdiv | Bmod -> (
-        match (t1, t2) with
-        | TInt, TInt -> (TEbinop (op, te1, te2), TInt)
-        | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TAny)
-        | _, _ ->
-          error "TypeError: unsupported operand types for arithmetic operation")
-      | Badd -> (
-        (* Handle overloaded '+' operator *)
-        match (t1, t2) with
-        | TString, TString -> (TEbinop (op, te1, te2), TString)
-        | TList, TList -> (TEbinop (op, te1, te2), TList)
-        | TInt, TInt -> (TEbinop (op, te1, te2), TInt)
-        | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TAny)
-        | _, _ ->
-          (TEbinop (op, te1, te2), TAny)
-          (* since the binop is runtime evaluated*)
-          (* | _, _ -> error "TypeError: unsupported operand types for '+'") *))
-      | Beq | Bneq ->
-        (* Equality checks can be between any types *)
-        (TEbinop (op, te1, te2), TBool)
-      | Blt | Ble | Bgt | Bge -> (
-        match (t1, t2) with
-        | TInt, TInt
-        | TBool, TBool
-        | TBool, TInt
-        | TInt, TBool
-        | TString, TString
-        | TList, TList
-        | TAny, _
-        | _, TAny -> (TEbinop (op, te1, te2), TBool)
-        | _, _ -> error "TypeError: unsupported operand types for comparison")
-      | Band | Bor -> (TEbinop (op, te1, te2), TBool))
+    let te1, t1 = type_expr ctx e1 in
+    let te2, t2 = type_expr ctx e2 in
+    match op with
+    | Band | Bor -> (TEbinop (op, te1, te2), TAny)
+    | Bsub | Bmul | Bdiv | Bmod -> (
+      match (t1, t2) with
+      | TInt, TInt -> (TEbinop (op, te1, te2), TInt)
+      | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TAny)
+      | _, _ ->
+        error "TypeError: unsupported operand types for arithmetic operation")
+    | Badd -> (
+      (* Handle overloaded '+' operator *)
+      match (t1, t2) with
+      | TString, TString -> (TEbinop (op, te1, te2), TString)
+      | TList, TList -> (TEbinop (op, te1, te2), TList)
+      | TInt, TInt -> (TEbinop (op, te1, te2), TInt)
+      | TAny, _ | _, TAny -> (TEbinop (op, te1, te2), TAny)
+      | _, _ ->
+        (TEbinop (op, te1, te2), TAny)
+        (* since the binop is runtime evaluated*)
+        (* | _, _ -> error "TypeError: unsupported operand types for '+'") *))
+    | Beq | Bneq ->
+      (* Equality checks can be between any types *)
+      (TEbinop (op, te1, te2), TBool)
+    | Blt | Ble | Bgt | Bge -> (
+      match (t1, t2) with
+      | TInt, TInt
+      | TBool, TBool
+      | TBool, TInt
+      | TInt, TBool
+      | TString, TString
+      | TList, TList
+      | TAny, _
+      | _, TAny -> (TEbinop (op, te1, te2), TBool)
+      | _, _ -> error "TypeError: unsupported operand types for comparison"))
   | Eunop (op, e) -> (
     let te, t = type_expr ctx e in
     match op with

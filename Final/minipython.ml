@@ -1,6 +1,8 @@
 open Format
 open Lexing
 open Parser
+open PrintAst
+open PrintTypedAst
 
 let usage = "usage: mini-python [options] file.py"
 
@@ -44,8 +46,17 @@ let () =
   try
     let f = Parser.file Lexer.next_token lb in
     close_in c;
+    if debug then (
+      Printf.printf "Parsed AST:\n";
+      print_endline (PrintAst.print_file f));
     if !parse_only then exit 0;
+
+    (* typing *)
     let f = Typing.file ~debug f in
+
+    (if debug then
+       let fmt = Format.std_formatter in
+       Format.fprintf fmt "Typed AST:\n%a@." PrintTypedAst.print_tfile f);
     if !type_only then exit 0;
     let code = Compile.file ~debug f in
     let c = open_out (Filename.chop_suffix file ".py" ^ ".s") in

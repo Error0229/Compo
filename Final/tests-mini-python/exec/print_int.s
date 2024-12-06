@@ -545,6 +545,20 @@ end_Bcmp:
 	popq %rbx
 	popq %rbp
 	ret
+
+is_true:
+  pushq %r12
+  movq 8(%rdi), %r12
+  cmpq $0, %r12
+  popq %r12
+  je actually_false
+  jmp actually_true
+actually_true:
+  movq $1, %rax
+  ret
+actually_false:
+  movq $0, %rax
+  ret
 	.data
 add_error_msg:
 	.string "error: invalid type for '+' operand"
