@@ -99,7 +99,8 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
       | Blt
       | Ble
       | Bgt
-      | Bge  (** == != < <= > >= *) ->
+      | Bge  (** == != < <= > >= *)
+      ->
         let operations = 
         let h = Hashtbl.create 32 in
         List.iter (fun (s, tok) -> Hashtbl.add h s tok)
@@ -113,12 +114,33 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
         popq rdi ++
         movq !%rax !%rsi ++
         call (operations op)
-      | Band
-      | Bor  (** and or *)
-        ->
-          failwith "TODO"
+      | Band ->
+        let ret_f = ( Util.genid "and_ret_first" ) in
+        (env,
+        v1 ++
+        pushq !%rax ++
+        movq !%rax !%rdi ++
+        call "is_true" ++
+        cmpq (imm 0)  !%rax++
+        popq rax ++
+        je  ret_f ++
+        v2 ++
+        label ret_f 
+        )
+      | Bor ->
+        let ret_f = ( Util.genid "or_ret_first" ) in
+        (env,
+        v1 ++
+        pushq !%rax ++
+        movq !%rax !%rdi ++
+        call "is_true" ++
+        cmpq (imm 1)  !%rax++
+        popq rax ++
+        je  ret_f ++
+        v2 ++
+        label ret_f
+        )
     )
-
   | _ -> failwith "TODO"
   (* ... Handle other cases ... *)
   and compile_constant env (cst : Ast.constant) : env * X86_64.text =
@@ -866,7 +888,7 @@ min:
   xorq (imm 1) !%r12 ++
   movq !%r12  (ind ~ofs: 8 rax) ++
  epilogue "Bneq" ++
-  
+
   prologue "Bcmp" ++
     label "fail_cmp" ++
     movq (ilab "cmp_error_msg") !%rdi ++
@@ -876,8 +898,26 @@ min:
     call "exit" ++
 epilogue "Bcmp"
 in
+let is_true = 
+inline 
+"
+is_true:
+  pushq %r12
+  movq 8(%rdi), %r12
+  cmpq $0, %r12
+  popq %r12
+  je actually_false
+  jmp actually_true
+actually_true:
+  movq $1, %rax
+  ret
+actually_false:
+  movq $0, %rax
+  ret
+"
+in
   let env = { env with data = env.data @ data_items } in
-  (env, my_malloc ++ len ++ print_value ++ inline_Badd ++ my_printf ++ cmps )
+  (env, my_malloc ++ len ++ print_value ++ inline_Badd ++ my_printf ++ cmps ++ is_true )
 
 (* let setup_parameters (params : Ast.var list) : env * X86_64.text = *)
 (* let rec compile_texpr (ctx : env) (expr : Ast.texpr) : X86_64.text = *)

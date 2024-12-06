@@ -4,29 +4,53 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	addq $-8, %rsp
-	pushq %r12
-	movq $40, %rdi
-	call my_malloc
-	movq %rax, %r12
-	movq $4, 0(%r12)
-	movq $3, 8(%r12)
 	movq $16, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
+	movq $1, 0(%rax)
 	movq $1, 8(%rax)
-	movq %rax, 16(%r12)
+	movq %rax, %rdi
+	call print_value
+	call print_newline
 	movq $16, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
-	movq $2, 8(%rax)
-	movq %rax, 24(%r12)
+	movq $1, 0(%rax)
+	movq $0, 8(%rax)
+	movq %rax, %rdi
+	call print_value
+	call print_newline
 	movq $16, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
-	movq $3, 8(%rax)
-	movq %rax, 32(%r12)
-	movq %r12, %rax
-	popq %r12
+	movq $1, 0(%rax)
+	movq $1, 8(%rax)
+	pushq %rax
+	movq %rax, %rdi
+	call is_true
+	cmpq $0, %rax
+	popq %rax
+	je and_ret_first_0
+	movq $16, %rdi
+	call my_malloc
+	movq $1, 0(%rax)
+	movq $0, 8(%rax)
+and_ret_first_0:
+	movq %rax, %rdi
+	call print_value
+	call print_newline
+	movq $16, %rdi
+	call my_malloc
+	movq $1, 0(%rax)
+	movq $1, 8(%rax)
+	pushq %rax
+	movq %rax, %rdi
+	call is_true
+	cmpq $1, %rax
+	popq %rax
+	je or_ret_first_1
+	movq $16, %rdi
+	call my_malloc
+	movq $1, 0(%rax)
+	movq $0, 8(%rax)
+or_ret_first_1:
 	movq %rax, %rdi
 	call print_value
 	call print_newline
