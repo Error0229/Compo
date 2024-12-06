@@ -3,6 +3,7 @@
 main:
 	pushq %rbp
 	movq %rsp, %rbp
+	addq $-16, %rsp
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
@@ -14,6 +15,7 @@ main:
 	call print_newline
 	xorq %rax, %rax
 end_main:
+	subq $-16, %rsp
 	popq %rbp
 	ret
 my_malloc:
@@ -249,10 +251,12 @@ end_Badd:
 	ret
   
 my_printf:
+  pushq %rbp
   movq %rsp, %rbp
   andq $-16, %rsp 
   call printf
   movq %rbp, %rsp
+  popq %rbp
   ret
 
   # Input: %rdi = x, %rsi = y

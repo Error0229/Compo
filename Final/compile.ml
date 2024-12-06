@@ -252,19 +252,21 @@ and compile_tdef env ((fn, body) : Ast.tdef) : X86_64.text * env =
   let ret_0 =
     xorq !%rax !%rax
   in
-  let prologue = 
-    label fn_label ++
-    pushq !%rbp ++
-    movq !%rsp !%rbp ++
-    param_setup
-  in
   (* Compile the function body *)
   let body_code, env = compile_tstmt env body in
   (* print_data env.data; *)
   (* Epilogue label for returns *)
+  let prologue = 
+    label fn_label ++
+    pushq !%rbp ++
+    movq !%rsp !%rbp ++
+    addq (imm env.next_offset) !%rsp ++
+    param_setup
+  in
   let epilogue_label = "end_" ^ fn_label in
   let epilogue = 
     label epilogue_label ++
+    subq (imm env.next_offset) !%rsp ++
     popq rbp ++
     ret
   in
@@ -329,7 +331,7 @@ and compile_function_call env (fn : Ast.fn) (args : Ast.texpr list) : X86_64.tex
   in
   (code, env)
 
-and allocate_variable env var_name =
+and allocate_variable env var_name : int * env =
   (* Check if variable already exists *)
   if List.exists (fun (name, _) -> name = var_name) env.locals then
     let offset = List.assoc var_name env.locals in
@@ -387,10 +389,12 @@ and builtins env : env * X86_64.text =
   let my_printf = (
 inline "  
 my_printf:
+  pushq %rbp
   movq %rsp, %rbp
   andq $-16, %rsp 
   call printf
   movq %rbp, %rsp
+  popq %rbp
   ret
 "
   )  in
