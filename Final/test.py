@@ -1,8 +1,7 @@
-def f(i, j):
-    if i >= j:
-        return []
-    x = f(i + 1, j)
-    print(x)
-    return [i] + x
+def make(n):
+    if n == 0: 
+        return ""
+    else:
+        return "a" + make(n-1)
 
-print(f(4, 7))
+print(make(3))

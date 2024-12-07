@@ -217,13 +217,16 @@ inline_Badd:
   cmpq $4, %r9
   je add_list
   jmp fail_add
-add_int:
-  movq 8(%rdi), %r9
-  movq 8(%rsi), %r10
-  addq %r9, %r10
-  movq %rdi, %rax
-  movq %r10, 8(%rax)
-  jmp end_inline_Badd
+  add_int:
+	movq 8(%rdi), %r9
+	movq 8(%rsi), %r10
+	addq %r9, %r10
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq %r10, 8(%rax)
+	jmp end_inline_Badd
+
 add_string:
   movq 8(%rdi), %r8
   movq 8(%rsi), %r9
@@ -612,19 +615,19 @@ actually_false:
   ret
 	.data
 add_error_msg:
-	.string "error: invalid type for '+' operand"
+	.string "error: invalid type for '+' operand\n"
 cmp_error_msg:
-	.string "error: invalid comparison"
+	.string "error: invalid comparison\n"
 comma_space:
 	.string ", "
 div_error_msg:
-	.string "error: invalid type for '/' operand"
+	.string "error: invalid type for '/' operand\n"
 error_msg:
 	.string "error: invalid value\n"
 false_str:
 	.string "False"
 func_error_msg:
-	.string "error: fail to call function for whatever reason"
+	.string "error: fail to call function for whatever reason\n"
 int_fmt:
 	.string "%ld"
 list_end:
@@ -632,9 +635,9 @@ list_end:
 list_start:
 	.string "["
 mod_error_msg:
-	.string "error: invalid type for '%' operand"
+	.string "error: invalid type for '%' operand\n"
 mul_error_msg:
-	.string "error: invalid type for '*' operand"
+	.string "error: invalid type for '*' operand\n"
 newline_str:
 	.string "\n"
 none_str:
@@ -642,6 +645,6 @@ none_str:
 str_fmt:
 	.string "%s"
 sub_error_msg:
-	.string "error: invalid type for '-' operand"
+	.string "error: invalid type for '-' operand\n"
 true_str:
 	.string "True"

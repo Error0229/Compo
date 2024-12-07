@@ -7,15 +7,10 @@ main:
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
-	movq $7, 8(%rax)
+	movq $3, 8(%rax)
 	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $4, 8(%rax)
-	pushq %rax
-	call f
-	addq $16, %rsp
+	call make
+	addq $8, %rsp
 	movq %rax, %rdi
 	call print_value
 	call print_newline
@@ -24,73 +19,85 @@ end_main:
 	subq $-8, %rsp
 	popq %rbp
 	ret
-f:
+make:
 	pushq %rbp
 	movq %rsp, %rbp
-	addq $-32, %rsp
+	addq $-16, %rsp
 	movq 16(%rbp), %rax
 	movq %rax, -8(%rbp)
-	movq 24(%rbp), %rax
-	movq %rax, -16(%rbp)
 	movq -8(%rbp), %rax
 	pushq %rax
-	movq -16(%rbp), %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $0, 8(%rax)
 	popq %rdi
 	movq %rax, %rsi
-	call Bge
+	call Beq
 	movq %rax, %rdi
 	call is_true
 	cmpq $0, %rax
-	je else_0
+	je else_2
 	pushq %r12
-	movq $16, %rdi
+	movq $17, %rdi
 	call my_malloc
+	movq $3, 0(%rax)
+	movq $0, 8(%rax)
+	leaq 16(%rax), %rdi
+	movq $str_0, %rsi
 	movq %rax, %r12
-	movq $4, 0(%r12)
-	movq $0, 8(%r12)
+	call strcpy
 	movq %r12, %rax
 	popq %r12
-	jmp end_f
-	jmp endif_1
-else_0:
-endif_1:
-	movq -16(%rbp), %rax
+	jmp end_make
+	jmp endif_3
+else_2:
+	pushq %r12
+	movq $18, %rdi
+	call my_malloc
+	movq $3, 0(%rax)
+	movq $1, 8(%rax)
+	leaq 16(%rax), %rdi
+	movq $str_1, %rsi
+	movq %rax, %r12
+	call strcpy
+	movq %r12, %rax
+	popq %r12
 	pushq %rax
 	movq -8(%rbp), %rax
-	movq %rax, %r12
+	pushq %rax
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
 	movq $1, 8(%rax)
-	movq %rax, %rsi
-	movq %r12, %rdi
-	call Badd
+	popq %r8
+	movq %rax, %r9
+	movq 0(%r8), %rax
+	movq 0(%r9), %rcx
+	cmpq %rax, %rcx
+	jne fail_sub
+	cmpq $2, %rax
+	jne fail_sub
+	movq 8(%r8), %rax
+	movq 8(%r9), %rcx
+	subq %rcx, %rax
+	movq %rax, 8(%r8)
+	movq %r8, %rax
 	pushq %rax
-	call f
-	addq $16, %rsp
-	movq %rax, -32(%rbp)
-	movq -32(%rbp), %rax
-	movq %rax, %rdi
-	call print_value
-	call print_newline
-	pushq %r12
-	movq $24, %rdi
-	call my_malloc
-	movq %rax, %r12
-	movq $4, 0(%r12)
-	movq $1, 8(%r12)
-	movq -8(%rbp), %rax
-	movq %rax, 16(%r12)
-	movq %r12, %rax
-	popq %r12
-	movq %rax, %r12
-	movq -32(%rbp), %rax
+	call make
+	addq $8, %rsp
 	movq %rax, %rsi
-	movq %r12, %rdi
+	popq %rdi
 	call Badd
-	jmp end_f
-end_f:
-	subq $-32, %rsp
+	jmp end_make
+endif_3:
+	pushq %rdi
+	movq $8, %rdi
+	call my_malloc
+	movq $0, 0(%rax)
+	popq %rdi
+end_make:
+	subq $-16, %rsp
 	popq %rbp
 	ret
 my_malloc:
@@ -276,13 +283,16 @@ inline_Badd:
   cmpq $4, %r9
   je add_list
   jmp fail_add
-add_int:
-  movq 8(%rdi), %r9
-  movq 8(%rsi), %r10
-  addq %r9, %r10
-  movq %rdi, %rax
-  movq %r10, 8(%rax)
-  jmp end_inline_Badd
+  add_int:
+	movq 8(%rdi), %r9
+	movq 8(%rsi), %r10
+	addq %r9, %r10
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq %r10, 8(%rax)
+	jmp end_inline_Badd
+
 add_string:
   movq 8(%rdi), %r8
   movq 8(%rsi), %r9
@@ -671,19 +681,19 @@ actually_false:
   ret
 	.data
 add_error_msg:
-	.string "error: invalid type for '+' operand"
+	.string "error: invalid type for '+' operand\n"
 cmp_error_msg:
-	.string "error: invalid comparison"
+	.string "error: invalid comparison\n"
 comma_space:
 	.string ", "
 div_error_msg:
-	.string "error: invalid type for '/' operand"
+	.string "error: invalid type for '/' operand\n"
 error_msg:
 	.string "error: invalid value\n"
 false_str:
 	.string "False"
 func_error_msg:
-	.string "error: fail to call function for whatever reason"
+	.string "error: fail to call function for whatever reason\n"
 int_fmt:
 	.string "%ld"
 list_end:
@@ -691,16 +701,20 @@ list_end:
 list_start:
 	.string "["
 mod_error_msg:
-	.string "error: invalid type for '%' operand"
+	.string "error: invalid type for '%' operand\n"
 mul_error_msg:
-	.string "error: invalid type for '*' operand"
+	.string "error: invalid type for '*' operand\n"
 newline_str:
 	.string "\n"
 none_str:
 	.string "None"
+str_0:
+	.string ""
+str_1:
+	.string "a"
 str_fmt:
 	.string "%s"
 sub_error_msg:
-	.string "error: invalid type for '-' operand"
+	.string "error: invalid type for '-' operand\n"
 true_str:
 	.string "True"

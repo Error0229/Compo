@@ -53,10 +53,10 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
       | Badd ->
 (  env,
         v1 ++ 
-        movq !%rax !%r12 ++
+        pushq !%rax++
         v2 ++
         movq !%rax !%rsi ++
-        movq !%r12 !%rdi ++
+        popq rdi ++
         call "Badd"
 )
       | Bmul
@@ -153,6 +153,7 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
   | Cint n ->
     (* Allocate a heap block for the integer value *)
     (* Type tag: 2, Value: n *)
+    (* new int*)
     let code =
       movq (imm 16) !%rdi ++      (* Size of the block *)
       call "my_malloc" ++       (* %rax has pointer to new block *)
@@ -197,7 +198,7 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
     in
     env, code
   | Cnone ->
-    (* None value, type tag 0 *)
+    (* None value, type tag 0 new none🗿*)
     let code =
       movq (imm 8) !%rdi ++
       call "my_malloc" ++
@@ -275,7 +276,7 @@ and compile_tstmt env (stmt : Ast.tstmt) : X86_64.text * env =
   failwith "Statement not yet implemented" 
 (* ... Handle other cases ... *)
 and print_data data = 
-  print_endline "🗿<===========>🗿";
+  print_endline "🗿<===================>🗿";
   List.iter (fun (s, l) -> print_endline ("Key: " ^ l ^ " v: " ^ s ))data
 and compile_tdef env ((fn, body) : Ast.tdef) : X86_64.text * env =
   let fn_label = fn.fn_name in
@@ -297,13 +298,22 @@ and compile_tdef env ((fn, body) : Ast.tdef) : X86_64.text * env =
     param_setup
   in
   let epilogue_label = "end_" ^ fn_label in
-  let epilogue = 
+  let epilogue = (
+    if fn_label = "main" then 
+      ret_0 
+    else
+      pushq !%rdi ++
+      movq (imm 8) !%rdi ++
+      call "my_malloc" ++
+      movq (imm 0) (ind rax)  (* Type tag 0 *) ++
+      popq rdi
+     ) ++
     label epilogue_label ++
     subq (imm env.next_offset) !%rsp ++
     popq rbp ++
     ret
   in
-  (prologue ++ body_code ++ (if fn_label = "main" then ret_0 else nop) ++ epilogue, env)
+  (prologue ++ body_code ++ epilogue, env)
 
   (* Function to generate the data section from env.data *)
 and generate_data_section (data_items : (string * label) list) : X86_64.data =
@@ -602,13 +612,13 @@ in
     ("%ld", "int_fmt");
     ("%s","str_fmt");
     ("error: invalid value\n", "error_msg");
-    ("error: invalid type for '-' operand", "sub_error_msg");
-    ("error: invalid type for '*' operand", "mul_error_msg");
-    ("error: invalid type for '%' operand", "mod_error_msg");
-    ("error: invalid type for '/' operand", "div_error_msg");
-    ("error: invalid type for '+' operand", "add_error_msg");
-    ("error: invalid comparison", "cmp_error_msg");
-    ("error: fail to call function for whatever reason", "func_error_msg");
+    ("error: invalid type for '-' operand\n", "sub_error_msg");
+    ("error: invalid type for '*' operand\n", "mul_error_msg");
+    ("error: invalid type for '%' operand\n", "mod_error_msg");
+    ("error: invalid type for '/' operand\n", "div_error_msg");
+    ("error: invalid type for '+' operand\n", "add_error_msg");
+    ("error: invalid comparison\n", "cmp_error_msg");
+    ("error: fail to call function for whatever reason\n", "func_error_msg");
     ("\n", "newline_str");
     ( "[", "list_start");
     ( "]", "list_end");
@@ -630,13 +640,17 @@ inline_Badd:
   cmpq $4, %r9
   je add_list
   jmp fail_add
-add_int:
-  movq 8(%rdi), %r9
-  movq 8(%rsi), %r10
-  addq %r9, %r10
-  movq %rdi, %rax
-  movq %r10, 8(%rax)
-  jmp end_inline_Badd
+  " ++
+label "add_int" ++
+  movq (ind ~ofs: 8 rdi) !%r9 ++
+  movq (ind ~ofs: 8 rsi) !%r10 ++
+  addq !%r9 !%r10 ++
+  movq (imm 16) !%rdi ++      (* Size of the block *)
+  call "my_malloc" ++       (* %rax has pointer to new block *)
+  movq (imm 2) (ind rax) ++ (* Type tag at offset 0 *)
+  movq !%r10 (ind ~ofs:8 rax) ++  (* Value at offset 8 *)
+  jmp "end_inline_Badd" ++
+ inline"
 add_string:
   movq 8(%rdi), %r8
   movq 8(%rsi), %r9
