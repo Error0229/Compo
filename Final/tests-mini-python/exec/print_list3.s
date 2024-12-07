@@ -205,6 +205,15 @@ fail_sub:
 fail_func_call:
 	movq $func_error_msg, %rdi
 	jmp print_error
+fail_get:
+	movq $get_error_msg, %rdi
+	jmp print_error
+fail_index_must_int:
+	movq $bad_index_error_msg, %rdi
+	jmp print_error
+fail_index_out_of_range:
+	movq $out_of_range_error_msg, %rdi
+	jmp print_error
 print_error:
 	xorq %rax, %rax
 	call my_printf
@@ -628,9 +637,58 @@ actually_true:
 actually_false:
   movq $0, %rax
   ret
+range:
+	pushq %rbp
+	pushq %r12
+	movq %rsp, %rbp
+	movq 24(%rbp), %r12
+	movq 0(%r12), %rdi
+	cmpq $2, %rdi
+	jne fail_func_call
+	movq 8(%r12), %r12
+	movq %r12, %rdi
+	imulq $8, %rdi
+	addq $16, %rdi
+	call my_malloc
+	movq $4, 0(%rax)
+	movq %r12, 8(%rax)
+	movq %rax, %r11
+	movq $0, %r10
+start_range_loop:
+	cmpq %r12, %r10
+	je end_range
+	pushq %r10
+	pushq %r11
+	movq $16, %rdi
+	call my_malloc
+	popq %r11
+	popq %r10
+	movq $2, 0(%rax)
+	movq %r10, 8(%rax)
+	movq %rax, 16(%r11,%r10,8)
+	incq %r10
+	jmp start_range_loop
+end_range:
+	movq %r11, %rax
+	popq %r12
+	popq %rbp
+	ret
+list:
+	pushq %rbp
+	pushq %r12
+	movq %rsp, %rbp
+	movq 24(%rbp), %r12
+	cmpq $4, 0(%r12)
+	jne fail_func_call
+	movq %r12, %rax
+	popq %r12
+	popq %rbp
+	ret
 	.data
 add_error_msg:
 	.string "error: invalid type for '+' operand\n"
+bad_index_error_msg:
+	.string "error: the index of a list must be an interger"
 cmp_error_msg:
 	.string "error: invalid comparison\n"
 comma_space:
@@ -643,6 +701,8 @@ false_str:
 	.string "False"
 func_error_msg:
 	.string "error: fail to call function for whatever reason\n"
+get_error_msg:
+	.string "error: the [] operator only works on list\n"
 int_fmt:
 	.string "%ld"
 list_end:
@@ -657,6 +717,8 @@ newline_str:
 	.string "\n"
 none_str:
 	.string "None"
+out_of_range_error_msg:
+	.string "error: the index is out of range\n"
 str_fmt:
 	.string "%s"
 sub_error_msg:

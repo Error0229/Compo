@@ -1,7 +1,13 @@
-def make(n):
-    if n == 0: 
-        return ""
+def str(i):
+    l = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    if i < 10:
+        return l[i]
     else:
-        return "a" + make(n-1)
+        return str(i // 10) + l[i % 10]
 
-print(make(3))
+print(str(0))
+print(str(42))
+print(str(1024))
+
+# print(11%10)
+# print(42%10)

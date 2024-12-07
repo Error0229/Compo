@@ -28,7 +28,7 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
       call "my_malloc" ++       (* %rax has pointer to new block *)
       movq !%rax !%r12 ++
       movq (imm 4) (ind r12) ++ (* Type tag at offset 0 *)
-      movq (imm (List.length l)) (ind ~ofs:8 r12)(* Type tag at offset 0 *)
+      movq (imm (List.length l)) (ind ~ofs:8 r12)(* list size at offset 8 *)
   in
   let code , env, _=
   List.fold_left (fun (acc_code, acc_env, ith) s ->
@@ -72,9 +72,12 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
         let operations = 
         let h = Hashtbl.create 32 in
         List.iter (fun (s, tok) -> Hashtbl.add h s tok)
-          [Bmul, imulq !%rcx !%rax; Bdiv, cqto ++ idivq !%rcx ; Bmod, cqto ++ idivq !%rcx ++ movq !%rdx !%rax;
-          Bsub, subq !%rcx !%rax
-;];
+          [
+            Bmul, imulq !%rcx !%rax; 
+            Bdiv, cqto ++ idivq !%rcx; 
+            Bmod, cqto ++ idivq !%rcx ++ movq !%rdx !%rax;
+            Bsub, subq !%rcx !%rax
+          ;];
         fun s -> try Hashtbl.find h s with Not_found ->  label "🤷" in
 
       env,  
@@ -83,17 +86,22 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
         v2 ++
         popq r8 ++
         movq !%rax !%r9 ++
-        movq (ind r8) !%rax ++ (* v1 *)
-        movq (ind r9) !%rcx ++ (* v2 *)
+        movq (ind r8) !%rax ++ (* v1.tag *)
+        movq (ind r9) !%rcx ++ (* v2.tag *)
         cmpq !%rax !%rcx ++
         jne ( err_msgs op ) ++
         cmpq (imm 2) !%rax ++
         jne ( err_msgs op ) ++
-        movq (ind ~ofs:8 r8) !%rax ++
-        movq (ind ~ofs:8 r9) !%rcx ++
+        movq (ind ~ofs:8 r8) !%rax ++ (* rax = v1 *)
+        movq (ind ~ofs:8 r9) !%rcx ++ (* rcx = v2 *)
         ( operations op ) ++
-        movq !%rax (ind ~ofs:8 r8) ++
-        movq !%r8 !%rax
+        movq !%rax !%r8 ++ (* r8 = rax(v1//v2)*)
+        pushq !%r8 ++
+        movq (imm 16) !%rdi ++      (* Size of the block *)
+        call "my_malloc" ++       (* %rax has pointer to new block *)
+        popq r8 ++
+        movq (imm 2) (ind rax) ++ (* Type tag at offset 0 *)
+        movq !%r8 (ind ~ofs:8 rax) (* Value at offset 8 *)
       | Beq
       | Bneq
       | Blt
@@ -145,6 +153,25 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
   | TEcall (fname, el) ->
      let code, env = ( compile_function_call env fname el) in
      env, code
+  | TEget (e1, e2) ->
+
+      let env, v1 = compile_texpr env e1 in
+      let env, v2 = compile_texpr env e2 in
+
+      env, 
+      v1 ++
+      cmpq (imm 4) (ind ~ofs:0 rax) ++
+      jne "fail_get" ++
+      pushq !%rax ++
+      v2 ++
+      popq rdi ++
+      cmpq (imm 2) (ind ~ofs:0 rax) ++
+      jne "fail_index_must_int" ++
+      movq (ind ~ofs: 8 rdi) !%rsi ++
+      cmpq (ind ~ofs: 8 rax) !%rsi ++ (* compare the index rax and the size of the list rsi*)
+      jle "fail_index_out_of_range" ++
+      movq (ind ~ofs: 8 rax) !%rsi ++ (* move index to rsi*)
+      movq (ind ~ofs:16 ~index:rsi ~scale:8 rdi) !%rax 
 
   | _ -> failwith "TODO texpr"
   (* ... Handle other cases ... *)
@@ -331,8 +358,7 @@ and compile_tfile (tdefs : Ast.tfile) : X86_64.program =
     locals = [];
     next_offset = 0;
     data = [];
-    functions = functions @ ["len","len";
-    (* "range","range";"list","list" *)
+    functions = functions @ ["len","len"; "range","range"; "list","list"
     ];
     current_function = "";
   } in
@@ -597,7 +623,19 @@ in
   label "fail_func_call" ++
   movq (ilab "func_error_msg") !%rdi ++
   jmp "print_error" ++
+
+  label "fail_get" ++
+  movq (ilab "get_error_msg") !%rdi ++
+  jmp "print_error" ++
   
+  label "fail_index_must_int" ++
+  movq (ilab "bad_index_error_msg") !%rdi ++
+  jmp "print_error" ++
+
+  label "fail_index_out_of_range" ++
+  movq (ilab "out_of_range_error_msg") !%rdi ++
+  jmp "print_error" ++
+
   label "print_error" ++
   xorq !%rax !%rax ++
   call "my_printf" ++
@@ -619,6 +657,10 @@ in
     ("error: invalid type for '+' operand\n", "add_error_msg");
     ("error: invalid comparison\n", "cmp_error_msg");
     ("error: fail to call function for whatever reason\n", "func_error_msg");
+    ("error: the [] operator only works on list\n", "get_error_msg");
+    ("error: the index of a list must be an interger", "bad_index_error_msg");
+    ("error: the index is out of range\n", "out_of_range_error_msg");
+
     ("\n", "newline_str");
     ( "[", "list_start");
     ( "]", "list_end");
@@ -984,14 +1026,73 @@ actually_false:
   ret
 "
 in
-  let env = { env with data = env.data @ data_items } in
-  (env, my_malloc ++ len ++ print_value ++ inline_Badd ++ my_printf ++ cmps ++ is_true )
+let list = 
+  label "list" ++
+    pushq !%rbp ++
+    pushq !%r12 ++
+    movq !%rsp !%rbp ++
+    movq (ind ~ofs:24 rbp) !%r12 ++
+    cmpq (imm 4) (ind ~ofs:0 r12) ++
+    jne "fail_func_call" ++
+    movq !%r12 !%rax ++ 
 
-(* let setup_parameters (params : Ast.var list) : env * X86_64.text = *)
-(* let rec compile_texpr (ctx : env) (expr : Ast.texpr) : X86_64.text = *)
-(* let rec compile_tstmt (ctx : env) (stmt : Ast.tstmt) : X86_64.text = *)
-(* let compile_tdef (ctx : env) ((fn, body) : Ast.tdef) : X86_64.text = *)
-(* let compile_tfile (ctx : env) (tdefs : Ast.tfile) : X86_64.program = *)
+    popq r12 ++
+    popq rbp ++
+    ret
+in 
+let range = 
+    label "range" ++
+    pushq !%rbp ++
+    pushq !%r12 ++
+    movq !%rsp !%rbp ++
+    movq (ind ~ofs:24 rbp) !%r12 ++
+
+    movq (ind ~ofs:0 r12) !%rdi ++
+    cmpq (imm 2) !%rdi ++
+    jne "fail_func_call" ++ (* if not int *)
+    movq (ind ~ofs:8 r12) !%r12 ++ (* r12 = n *) 
+
+    (* size(rdi) = (n* 8) + 16 list*)
+    (* new list*)
+    movq !%r12 !%rdi ++
+    imulq (imm 8) !%rdi ++
+    addq (imm 16) !%rdi ++
+    call "my_malloc" ++       (* %rax has pointer to new block *)
+
+    movq (imm 4) (ind rax) ++ (* Type tag at offset 0 *)
+    movq !%r12 (ind ~ofs:8 rax) ++ (* list size at offset 8 *)
+    movq !%rax !%r11 ++  (* save new list to r11*)
+    movq (imm 0) !%r10 ++ (* r10 = i = 0 *)
+    label "start_range_loop" ++
+
+      cmpq !%r12 !%r10 ++
+      je "end_range" ++
+
+      pushq !%r10 ++
+      pushq !%r11 ++
+
+      movq (imm 16) !%rdi ++
+      call "my_malloc" ++       (* %rax has pointer to new block *)
+      popq r11 ++
+      popq r10 ++
+
+      movq (imm 2) (ind rax) ++ (* Type tag at offset 0 *)
+      movq !%r10 (ind ~ofs:8 rax) ++ (* list size at offset 8 *)
+
+      movq !%rax (ind ~ofs:16 ~index: r10 ~scale:8 r11) ++
+
+      incq !%r10 ++ (* i++ *)
+    jmp "start_range_loop" ++
+
+    label "end_range" ++
+    movq !%r11 !%rax ++
+    popq r12 ++
+    popq rbp ++
+    ret
+in
+  let env = { env with data = env.data @ data_items } in
+  (env, my_malloc ++ len ++ print_value ++ inline_Badd ++ my_printf ++ cmps ++ is_true ++ range ++ list )
+
 and file ?debug:(b = false) (p : Ast.tfile) : X86_64.program =
   debug := b;
   compile_tfile p
