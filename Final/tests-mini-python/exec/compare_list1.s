@@ -340,6 +340,9 @@ end_print_value:
 	popq %rbx
 	popq %rbp
 	ret
+fail_for:
+	movq $for_error_msg, %rdi
+	jmp print_error
 fail_mul:
 	movq $mul_error_msg, %rdi
 	jmp print_error
@@ -852,6 +855,8 @@ error_msg:
 	.string "error: invalid value\n"
 false_str:
 	.string "False"
+for_error_msg:
+	.string "error: the for loop can only iterate a list\n"
 func_error_msg:
 	.string "error: fail to call function for whatever reason\n"
 get_error_msg:

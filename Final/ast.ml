@@ -105,7 +105,7 @@ type tstmt =
   | TSassign of var * texpr
   | TSprint of texpr
   | TSblock of tstmt list
-  | TSfor of var * texpr * tstmt
+  | TSfor of var * texpr * tstmt (* for i(var) in list(texpr): ...(tstmt)*)
   | TSeval of texpr
   | TSset of texpr * texpr * texpr
       (** {[

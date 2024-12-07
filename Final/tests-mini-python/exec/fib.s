@@ -3,39 +3,196 @@
 main:
 	pushq %rbp
 	movq %rsp, %rbp
-	addq $-8, %rsp
-	movq $16, %rdi
+	addq $-16, %rsp
+	pushq %r12
+	movq $60, %rdi
 	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $2, 8(%rax)
-	popq %rdi
-	movq %rax, %rsi
-	call Bgt
-	pushq %rax
-	movq %rax, %rdi
-	call is_true
-	cmpq $0, %rax
-	popq %rax
-	je and_ret_first_0
-	movq $16, %rdi
-	call my_malloc
-	movq $2, 0(%rax)
-	movq $1, 8(%rax)
-	pushq %rax
-	call len
-	addq $8, %rsp
-and_ret_first_0:
+	movq $3, 0(%rax)
+	movq $43, 8(%rax)
+	leaq 16(%rax), %rdi
+	movq $str_0, %rsi
+	movq %rax, %r12
+	call strcpy
+	movq %r12, %rax
+	popq %r12
 	movq %rax, %rdi
 	call print_value
 	call print_newline
+	pushq %r12
+	movq $48, %rdi
+	call my_malloc
+	movq %rax, %r12
+	movq $4, 0(%r12)
+	movq $4, 8(%r12)
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $0, 8(%rax)
+	movq %rax, 16(%r12)
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
+	movq %rax, 24(%r12)
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $11, 8(%rax)
+	movq %rax, 32(%r12)
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $42, 8(%rax)
+	movq %rax, 40(%r12)
+	movq %r12, %rax
+	popq %r12
+	cmpq $4, 0(%rax)
+	jne fail_for
+	movq 8(%rax), %rdi
+	imulq $8, %rdi
+	addq $16, %rdi
+	pushq %rax
+	call my_malloc
+	popq %r9
+	movq %rax, %r10
+	movq $4, 0(%r10)
+	movq 8(%r9), %rdx
+	movq %rdx, 8(%r10)
+	leaq 16(%r9), %rsi
+	leaq 16(%r10), %rdi
+	imulq $8, %rdx
+	pushq %r10
+	call memcpy
+	popq %r10
+	xorq %r11, %r11
+for_loop_1:
+	cmpq 8(%r9), %r11
+	je endfor_loop_1
+	movq 16(%r10,%r11,8), %rdi
+	movq %rdi, -16(%rbp)
+	pushq %r9
+	pushq %r10
+	pushq %r11
+	movq -16(%rbp), %rax
+	pushq %rax
+	call fib
+	addq $8, %rsp
+	movq %rax, %rdi
+	call print_value
+	call print_newline
+	popq %r11
+	popq %r10
+	popq %r9
+	incq %r11
+	jmp for_loop_1
+endfor_loop_1:
 	xorq %rax, %rax
 end_main:
-	subq $-8, %rsp
+	subq $-16, %rsp
+	popq %rbp
+	ret
+fibaux:
+	pushq %rbp
+	movq %rsp, %rbp
+	addq $-32, %rsp
+	movq 16(%rbp), %rax
+	movq %rax, -8(%rbp)
+	movq 24(%rbp), %rax
+	movq %rax, -16(%rbp)
+	movq 32(%rbp), %rax
+	movq %rax, -24(%rbp)
+	movq -24(%rbp), %rax
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $0, 8(%rax)
+	popq %rdi
+	movq %rax, %rsi
+	call Beq
+	movq %rax, %rdi
+	call is_true
+	cmpq $0, %rax
+	je else_2
+	movq -8(%rbp), %rax
+	jmp end_fibaux
+	jmp endif_3
+else_2:
+	movq -24(%rbp), %rax
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
+	popq %r8
+	movq %rax, %r9
+	movq 0(%r8), %rax
+	movq 0(%r9), %rcx
+	cmpq %rax, %rcx
+	jne fail_sub
+	cmpq $2, %rax
+	jne fail_sub
+	movq 8(%r8), %rax
+	movq 8(%r9), %rcx
+	subq %rcx, %rax
+	movq %rax, %r8
+	pushq %r8
+	movq $16, %rdi
+	call my_malloc
+	popq %r8
+	movq $2, 0(%rax)
+	movq %r8, 8(%rax)
+	pushq %rax
+	movq -8(%rbp), %rax
+	pushq %rax
+	movq -16(%rbp), %rax
+	movq %rax, %rsi
+	popq %rdi
+	call Badd
+	pushq %rax
+	movq -16(%rbp), %rax
+	pushq %rax
+	call fibaux
+	addq $24, %rsp
+	jmp end_fibaux
+endif_3:
+	pushq %rdi
+	movq $8, %rdi
+	call my_malloc
+	movq $0, 0(%rax)
+	popq %rdi
+end_fibaux:
+	subq $-32, %rsp
+	popq %rbp
+	ret
+fib:
+	pushq %rbp
+	movq %rsp, %rbp
+	addq $-16, %rsp
+	movq 16(%rbp), %rax
+	movq %rax, -8(%rbp)
+	movq -8(%rbp), %rax
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $0, 8(%rax)
+	pushq %rax
+	call fibaux
+	addq $24, %rsp
+	jmp end_fib
+	pushq %rdi
+	movq $8, %rdi
+	call my_malloc
+	movq $0, 0(%rax)
+	popq %rdi
+end_fib:
+	subq $-16, %rsp
 	popq %rbp
 	ret
 my_malloc:
@@ -713,6 +870,8 @@ none_str:
 	.string "None"
 out_of_range_error_msg:
 	.string "error: the index is out of range\n"
+str_0:
+	.string "quelques valeurs de la suite de Fibonacci :"
 str_fmt:
 	.string "%s"
 sub_error_msg:

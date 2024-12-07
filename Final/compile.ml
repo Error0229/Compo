@@ -298,7 +298,78 @@ and compile_tstmt env (stmt : Ast.tstmt) : X86_64.text * env =
     ++ call "print_newline"
  ), env
 
+ | TSfor (v, e, s) ->
+  let env, l = compile_texpr env e in
+  let loop_label = Util.genid "for_loop" in
+  let offset, env = allocate_variable env v.v_name in
+  let body, env = compile_tstmt env s in
+  l ++
+  cmpq (imm 4) (ind rax) ++ (* rax is the list*)
+  jne "fail_for" ++
+  
+  movq (ind ~ofs: 8 rax) !%rdi ++ (* move the l.len to rdi*)
+  imulq (imm 8) !%rdi ++
+  addq (imm 16) !%rdi ++
+  pushq !%rax ++
+  call "my_malloc" ++
+  popq r9 ++
+
+  movq !%rax !%r10 ++
+
+  movq (imm 4) (ind ~ofs:0 r10) ++ (* r10 = []*)
+  movq (ind ~ofs: 8 r9) !%rdx ++ (* move the l.len to rdi*)
+  movq !%rdx (ind ~ofs:8 r10) ++
+  leaq (ind ~ofs: 16 r9) rsi ++ (* source *)
+  leaq (ind ~ofs: 16 r10) rdi ++ (* destination *)
+  imulq (imm 8) !%rdx ++
+  pushq !%r10 ++
+  call "memcpy" ++
+  popq r10 ++ (* r10 = l*)
+  xorq !%r11 !%r11 ++ (* r11 = i = 0*)
+  label loop_label ++
+    cmpq (ind ~ofs: 8 r9) !%r11 ++ (* compare i with l.len *)
+    je ( "end" ^ loop_label)++
+    movq (ind ~ofs:16 ~index: r11 ~scale:8 r10) !%rdi ++
+    movq !%rdi (ind ~ofs:offset rbp) ++ (* v = l[i]*)
+
+    pushq !%r9 ++
+    pushq !%r10 ++
+    pushq !%r11 ++
+    body  ++
+    popq r11 ++
+    popq r10 ++
+    popq r9 ++
+
+  incq !%r11 ++
+  jmp loop_label ++
+ 
+  label ("end" ^ loop_label)
+  , env
   (* Placeholder: Need to implement print logic *)
+| TSset (e1, e2, e3) ->
+      let env, v1 = compile_texpr env e1 in
+      let env, v2 = compile_texpr env e2 in
+      let env, v3 = compile_texpr env e3 in
+
+      v1 ++
+      cmpq (imm 4) (ind ~ofs:0 rax) ++
+      jne "fail_get" ++
+      pushq !%rax ++
+      v2 ++
+      popq rdi ++
+      cmpq (imm 2) (ind ~ofs:0 rax) ++
+      jne "fail_index_must_int" ++
+      movq (ind ~ofs: 8 rdi) !%rsi ++
+      cmpq (ind ~ofs: 8 rax) !%rsi ++ (* compare the index (rax) and the size of the list (rsi)*)
+      jle "fail_index_out_of_range" ++
+      movq (ind ~ofs: 8 rax) !%rsi ++ (* move index to rsi*)
+      pushq !%rdi ++
+      pushq !%rsi ++
+      v3 ++
+      popq rsi ++
+      popq rdi ++
+      movq !%rax (ind ~ofs:16 ~index:rsi ~scale:8 rdi)
+   ,env
 | _ ->
   failwith "Statement not yet implemented" 
 (* ... Handle other cases ... *)
@@ -600,6 +671,10 @@ in
   label "end_print" ++
   epilogue "print_value" ++
 
+  label "fail_for" ++
+  movq (ilab "for_error_msg") !%rdi ++
+  jmp "print_error" ++
+
   label "fail_mul" ++
   movq (ilab "mul_error_msg") !%rdi ++
   jmp "print_error" ++
@@ -643,6 +718,7 @@ in
   call "exit"
 
 in 
+  (* write error msgs *)
   let data_items = [
     ("None", "none_str");
     ("True", "true_str");
@@ -660,6 +736,7 @@ in
     ("error: the [] operator only works on list\n", "get_error_msg");
     ("error: the index of a list must be an interger", "bad_index_error_msg");
     ("error: the index is out of range\n", "out_of_range_error_msg");
+    ("error: the for loop can only iterate a list\n", "for_error_msg");
 
     ("\n", "newline_str");
     ( "[", "list_start");
