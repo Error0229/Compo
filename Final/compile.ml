@@ -306,8 +306,9 @@ and compile_tstmt env (stmt : Ast.tstmt) : X86_64.text * env =
   l ++
   cmpq (imm 4) (ind rax) ++ (* rax is the list*)
   jne "fail_for" ++
+  movq !%rax !%r10 ++
   
-  movq (ind ~ofs: 8 rax) !%rdi ++ (* move the l.len to rdi*)
+  (* movq (ind ~ofs: 8 rax) !%rdi ++ (* move the l.len to rdi*)
   imulq (imm 8) !%rdi ++
   addq (imm 16) !%rdi ++
   pushq !%rax ++
@@ -323,11 +324,13 @@ and compile_tstmt env (stmt : Ast.tstmt) : X86_64.text * env =
   leaq (ind ~ofs: 16 r10) rdi ++ (* destination *)
   imulq (imm 8) !%rdx ++
   pushq !%r10 ++
+  pushq !%r9 ++
   call "memcpy" ++
-  popq r10 ++ (* r10 = l*)
+  popq r9 ++ *)
+  (* popq r10 ++ *)(* r10 = l *)
   xorq !%r11 !%r11 ++ (* r11 = i = 0*)
   label loop_label ++
-    cmpq (ind ~ofs: 8 r9) !%r11 ++ (* compare i with l.len *)
+    cmpq (ind ~ofs: 8 r10) !%r11 ++ (* compare i with l.len *)
     je ( "end" ^ loop_label)++
     movq (ind ~ofs:16 ~index: r11 ~scale:8 r10) !%rdi ++
     movq !%rdi (ind ~ofs:offset rbp) ++ (* v = l[i]*)
@@ -370,8 +373,11 @@ and compile_tstmt env (stmt : Ast.tstmt) : X86_64.text * env =
       popq rdi ++
       movq !%rax (ind ~ofs:16 ~index:rsi ~scale:8 rdi)
    ,env
-| _ ->
-  failwith "Statement not yet implemented" 
+| TSeval e ->
+    let env, v1 = compile_texpr env e in
+    v1 
+  , env
+
 (* ... Handle other cases ... *)
 and print_data data = 
   print_endline "🗿<===================>🗿";
@@ -543,9 +549,17 @@ my_printf:
   )  in
   let my_malloc = (
     prologue "my_malloc" ++
+    pushq !%rdi ++
+
+    movq !%rsp !%rbp ++
     andq (imm (-16)) !%rsp ++
     call "malloc" ++
     movq !%rbp !%rsp ++
+
+    popq rdx ++
+    movq !%rax !%rdi ++
+    xorq !%rsi !%rsi ++
+    call "memset" ++
     epilogue "my_malloc"
   )
 in 
@@ -779,6 +793,7 @@ add_string:
   pushq %rdi
   pushq %rsi
   movq -24(%rbp), %rdi
+  addq $17, %rdi
   pushq %r9
   call my_malloc
   popq %r9
@@ -792,7 +807,7 @@ add_string:
   pushq %rdi 
 
   leaq 16(%rdi), %rsi
-  leaq 16(%r12), %rdi  
+  leaq 16(%r12), %rdi  # new string
   call strcat
 
   popq %rdi

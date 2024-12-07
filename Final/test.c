@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+int foo() { return 1; }
 int main() {
   char str1[15];
   char str2[15];
@@ -15,4 +16,5 @@ int main() {
     printf("cake < dog%d\n", ret);
   else
     printf("cake == dog%d\n", ret);
+  printf("%d", foo());
 }

@@ -4,6 +4,21 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	addq $-8, %rsp
+	call super_main
+	addq $0, %rsp
+	xorq %rax, %rax
+end_main:
+	subq $-8, %rsp
+	popq %rbp
+	ret
+print_row:
+	pushq %rbp
+	movq %rsp, %rbp
+	addq $-40, %rsp
+	movq 16(%rbp), %rax
+	movq %rax, -8(%rbp)
+	movq 24(%rbp), %rax
+	movq %rax, -16(%rbp)
 	pushq %r12
 	movq $17, %rdi
 	call my_malloc
@@ -15,53 +30,51 @@ main:
 	call strcpy
 	movq %r12, %rax
 	popq %r12
+	movq %rax, -32(%rbp)
+	movq -16(%rbp), %rax
 	pushq %rax
-	pushq %r12
-	movq $17, %rdi
+	movq $16, %rdi
 	call my_malloc
-	movq $3, 0(%rax)
-	movq $0, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_0, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
-	popq %rdi
-	movq %rax, %rsi
-	call Beq
-	movq %rax, %rdi
-	call print_value
-	call print_newline
-	pushq %r12
-	movq $17, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $0, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_0, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
-	pushq %rax
-	pushq %r12
-	movq $18, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
+	movq $2, 0(%rax)
 	movq $1, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_1, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
-	popq %rdi
 	movq %rax, %rsi
-	call Blt
+	popq %rdi
+	call Badd
+	pushq %rax
+	call range
+	addq $8, %rsp
+	pushq %rax
+	call list
+	addq $8, %rsp
+	cmpq $4, 0(%rax)
+	jne fail_for
+	movq %rax, %r10
+	xorq %r11, %r11
+for_loop_1:
+	cmpq 8(%r10), %r11
+	je endfor_loop_1
+	movq 16(%r10,%r11,8), %rdi
+	movq %rdi, -40(%rbp)
+	pushq %r9
+	pushq %r10
+	pushq %r11
+	movq -8(%rbp), %rax
+	cmpq $4, 0(%rax)
+	jne fail_get
+	pushq %rax
+	movq -40(%rbp), %rax
+	popq %rdi
+	cmpq $2, 0(%rax)
+	jne fail_index_must_int
+	movq 8(%rdi), %rsi
+	cmpq 8(%rax), %rsi
+	jle fail_index_out_of_range
+	movq 8(%rax), %rsi
+	movq 16(%rdi,%rsi,8), %rax
 	movq %rax, %rdi
-	call print_value
-	call print_newline
+	call is_true
+	cmpq $0, %rax
+	je else_4
 	pushq %r12
 	movq $18, %rdi
 	call my_malloc
@@ -74,6 +87,13 @@ main:
 	movq %r12, %rax
 	popq %r12
 	pushq %rax
+	movq -32(%rbp), %rax
+	movq %rax, %rsi
+	popq %rdi
+	call Badd
+	movq %rax, -32(%rbp)
+	jmp endif_5
+else_4:
 	pushq %r12
 	movq $18, %rdi
 	call my_malloc
@@ -85,189 +105,307 @@ main:
 	call strcpy
 	movq %r12, %rax
 	popq %r12
-	popq %rdi
-	movq %rax, %rsi
-	call Blt
-	movq %rax, %rdi
-	call print_value
-	call print_newline
-	pushq %r12
-	movq $19, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $2, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_4, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
 	pushq %rax
-	pushq %r12
-	movq $19, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $2, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_4, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
-	popq %rdi
+	movq -32(%rbp), %rax
 	movq %rax, %rsi
-	call Bge
+	popq %rdi
+	call Badd
+	movq %rax, -32(%rbp)
+endif_5:
+	popq %r11
+	popq %r10
+	popq %r9
+	incq %r11
+	jmp for_loop_1
+endfor_loop_1:
+	movq -32(%rbp), %rax
 	movq %rax, %rdi
 	call print_value
 	call print_newline
-	pushq %r12
-	movq $17, %rdi
+	pushq %rdi
+	movq $8, %rdi
 	call my_malloc
-	movq $3, 0(%rax)
+	movq $0, 0(%rax)
+	popq %rdi
+end_print_row:
+	subq $-40, %rsp
+	popq %rbp
+	ret
+compute_row:
+	pushq %rbp
+	movq %rsp, %rbp
+	addq $-32, %rsp
+	movq 16(%rbp), %rax
+	movq %rax, -8(%rbp)
+	movq 24(%rbp), %rax
+	movq %rax, -16(%rbp)
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
 	movq $0, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_0, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
+	movq %rax, -32(%rbp)
+	movq -16(%rbp), %rax
 	pushq %rax
-	pushq %r12
-	movq $18, %rdi
+	movq $16, %rdi
 	call my_malloc
-	movq $3, 0(%rax)
-	movq $1, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_1, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
-	popq %rdi
-	movq %rax, %rsi
-	call Bneq
-	movq %rax, %rdi
-	call print_value
-	call print_newline
-	pushq %r12
-	movq $20, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $3, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_5, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
-	pushq %rax
-	pushq %r12
-	movq $20, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $3, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_5, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
+	movq $2, 0(%rax)
+	movq $0, 8(%rax)
 	popq %rdi
 	movq %rax, %rsi
 	call Beq
 	movq %rax, %rdi
-	call print_value
-	call print_newline
-	pushq %r12
-	movq $18, %rdi
+	call is_true
+	cmpq $0, %rax
+	je else_6
+	movq $16, %rdi
 	call my_malloc
-	movq $3, 0(%rax)
+	movq $2, 0(%rax)
 	movq $1, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_1, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
+	movq %rax, -32(%rbp)
+	jmp endif_7
+else_6:
+	movq -8(%rbp), %rax
+	cmpq $4, 0(%rax)
+	jne fail_get
 	pushq %rax
-	pushq %r12
-	movq $18, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $1, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_2, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
+	movq -16(%rbp), %rax
 	popq %rdi
-	movq %rax, %rsi
-	call Bgt
-	movq %rax, %rdi
-	call print_value
-	call print_newline
-	pushq %r12
-	movq $17, %rdi
+	cmpq $2, 0(%rax)
+	jne fail_index_must_int
+	movq 8(%rdi), %rsi
+	cmpq 8(%rax), %rsi
+	jle fail_index_out_of_range
+	movq 8(%rax), %rsi
+	movq 16(%rdi,%rsi,8), %rax
+	pushq %rax
+	movq -8(%rbp), %rax
+	cmpq $4, 0(%rax)
+	jne fail_get
+	pushq %rax
+	movq -16(%rbp), %rax
+	pushq %rax
+	movq $16, %rdi
 	call my_malloc
-	movq $3, 0(%rax)
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
+	popq %r8
+	movq %rax, %r9
+	movq 0(%r8), %rax
+	movq 0(%r9), %rcx
+	cmpq %rax, %rcx
+	jne fail_sub
+	cmpq $2, %rax
+	jne fail_sub
+	movq 8(%r8), %rax
+	movq 8(%r9), %rcx
+	subq %rcx, %rax
+	movq %rax, %r8
+	pushq %r8
+	movq $16, %rdi
+	call my_malloc
+	popq %r8
+	movq $2, 0(%rax)
+	movq %r8, 8(%rax)
+	popq %rdi
+	cmpq $2, 0(%rax)
+	jne fail_index_must_int
+	movq 8(%rdi), %rsi
+	cmpq 8(%rax), %rsi
+	jle fail_index_out_of_range
+	movq 8(%rax), %rsi
+	movq 16(%rdi,%rsi,8), %rax
+	movq %rax, %rsi
+	popq %rdi
+	call Badd
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $7, 8(%rax)
+	popq %r8
+	movq %rax, %r9
+	movq 0(%r8), %rax
+	movq 0(%r9), %rcx
+	cmpq %rax, %rcx
+	jne fail_mod
+	cmpq $2, %rax
+	jne fail_mod
+	movq 8(%r8), %rax
+	movq 8(%r9), %rcx
+	cqto
+	idivq %rcx
+	movq %rdx, %rax
+	movq %rax, %r8
+	pushq %r8
+	movq $16, %rdi
+	call my_malloc
+	popq %r8
+	movq $2, 0(%rax)
+	movq %r8, 8(%rax)
+	movq %rax, -32(%rbp)
+endif_7:
+	movq -8(%rbp), %rax
+	cmpq $4, 0(%rax)
+	jne fail_get
+	pushq %rax
+	movq -16(%rbp), %rax
+	popq %rdi
+	cmpq $2, 0(%rax)
+	jne fail_index_must_int
+	movq 8(%rdi), %rsi
+	cmpq 8(%rax), %rsi
+	jle fail_index_out_of_range
+	movq 8(%rax), %rsi
+	pushq %rdi
+	pushq %rsi
+	movq -32(%rbp), %rax
+	popq %rsi
+	popq %rdi
+	movq %rax, 16(%rdi,%rsi,8)
+	movq -16(%rbp), %rax
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
 	movq $0, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_0, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
-	pushq %rax
-	pushq %r12
-	movq $18, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $1, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_2, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
 	popq %rdi
 	movq %rax, %rsi
 	call Bgt
 	movq %rax, %rdi
-	call print_value
-	call print_newline
-	pushq %r12
-	movq $20, %rdi
-	call my_malloc
-	movq $3, 0(%rax)
-	movq $3, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_5, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
+	call is_true
+	cmpq $0, %rax
+	je else_8
+	movq -16(%rbp), %rax
 	pushq %rax
-	pushq %r12
-	movq $19, %rdi
+	movq $16, %rdi
 	call my_malloc
-	movq $3, 0(%rax)
-	movq $2, 8(%rax)
-	leaq 16(%rax), %rdi
-	movq $str_4, %rsi
-	movq %rax, %r12
-	call strcpy
-	movq %r12, %rax
-	popq %r12
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
+	popq %r8
+	movq %rax, %r9
+	movq 0(%r8), %rax
+	movq 0(%r9), %rcx
+	cmpq %rax, %rcx
+	jne fail_sub
+	cmpq $2, %rax
+	jne fail_sub
+	movq 8(%r8), %rax
+	movq 8(%r9), %rcx
+	subq %rcx, %rax
+	movq %rax, %r8
+	pushq %r8
+	movq $16, %rdi
+	call my_malloc
+	popq %r8
+	movq $2, 0(%rax)
+	movq %r8, 8(%rax)
+	pushq %rax
+	movq -8(%rbp), %rax
+	pushq %rax
+	call compute_row
+	addq $16, %rsp
+	jmp endif_9
+else_8:
+endif_9:
+	pushq %rdi
+	movq $8, %rdi
+	call my_malloc
+	movq $0, 0(%rax)
 	popq %rdi
+end_compute_row:
+	subq $-32, %rsp
+	popq %rbp
+	ret
+super_main:
+	pushq %rbp
+	movq %rsp, %rbp
+	addq $-32, %rsp
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $40, 8(%rax)
+	movq %rax, -16(%rbp)
+	movq -16(%rbp), %rax
+	pushq %rax
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $1, 8(%rax)
 	movq %rax, %rsi
-	call Ble
-	movq %rax, %rdi
-	call print_value
-	call print_newline
-	xorq %rax, %rax
-end_main:
-	subq $-8, %rsp
+	popq %rdi
+	call Badd
+	pushq %rax
+	call range
+	addq $8, %rsp
+	pushq %rax
+	call list
+	addq $8, %rsp
+	movq %rax, -24(%rbp)
+	movq -16(%rbp), %rax
+	pushq %rax
+	call range
+	addq $8, %rsp
+	pushq %rax
+	call list
+	addq $8, %rsp
+	cmpq $4, 0(%rax)
+	jne fail_for
+	movq %rax, %r10
+	xorq %r11, %r11
+for_loop_10:
+	cmpq 8(%r10), %r11
+	je endfor_loop_10
+	movq 16(%r10,%r11,8), %rdi
+	movq %rdi, -32(%rbp)
+	pushq %r9
+	pushq %r10
+	pushq %r11
+	movq -24(%rbp), %rax
+	cmpq $4, 0(%rax)
+	jne fail_get
+	pushq %rax
+	movq -32(%rbp), %rax
+	popq %rdi
+	cmpq $2, 0(%rax)
+	jne fail_index_must_int
+	movq 8(%rdi), %rsi
+	cmpq 8(%rax), %rsi
+	jle fail_index_out_of_range
+	movq 8(%rax), %rsi
+	pushq %rdi
+	pushq %rsi
+	movq $16, %rdi
+	call my_malloc
+	movq $2, 0(%rax)
+	movq $0, 8(%rax)
+	popq %rsi
+	popq %rdi
+	movq %rax, 16(%rdi,%rsi,8)
+	movq -32(%rbp), %rax
+	pushq %rax
+	movq -24(%rbp), %rax
+	pushq %rax
+	call compute_row
+	addq $16, %rsp
+	movq -32(%rbp), %rax
+	pushq %rax
+	movq -24(%rbp), %rax
+	pushq %rax
+	call print_row
+	addq $16, %rsp
+	popq %r11
+	popq %r10
+	popq %r9
+	incq %r11
+	jmp for_loop_10
+endfor_loop_10:
+	pushq %rdi
+	movq $8, %rdi
+	call my_malloc
+	movq $0, 0(%rax)
+	popq %rdi
+end_super_main:
+	subq $-32, %rsp
 	popq %rbp
 	ret
 my_malloc:
@@ -954,16 +1092,10 @@ out_of_range_error_msg:
 	.string "error: the index is out of range\n"
 str_0:
 	.string ""
-str_1:
-	.string "a"
 str_2:
-	.string "b"
+	.string "*"
 str_3:
-	.string "c"
-str_4:
-	.string "ab"
-str_5:
-	.string "abc"
+	.string "0"
 str_fmt:
 	.string "%s"
 sub_error_msg:

@@ -18,25 +18,10 @@ main:
 	movq -16(%rbp), %rax
 	cmpq $4, 0(%rax)
 	jne fail_for
-	movq 8(%rax), %rdi
-	imulq $8, %rdi
-	addq $16, %rdi
-	pushq %rax
-	call my_malloc
-	popq %r9
 	movq %rax, %r10
-	movq $4, 0(%r10)
-	movq 8(%r9), %rdx
-	movq %rdx, 8(%r10)
-	leaq 16(%r9), %rsi
-	leaq 16(%r10), %rdi
-	imulq $8, %rdx
-	pushq %r10
-	call memcpy
-	popq %r10
 	xorq %r11, %r11
 for_loop_0:
-	cmpq 8(%r9), %r11
+	cmpq 8(%r10), %r11
 	je endfor_loop_0
 	movq 16(%r10,%r11,8), %rdi
 	movq %rdi, -24(%rbp)
@@ -66,9 +51,15 @@ my_malloc:
 	pushq %r14
 	pushq %r15
 	movq %rsp, %rbp
+	pushq %rdi
+	movq %rsp, %rbp
 	andq $-16, %rsp
 	call malloc
 	movq %rbp, %rsp
+	popq %rdx
+	movq %rax, %rdi
+	xorq %rsi, %rsi
+	call memset
 end_my_malloc:
 	popq %r15
 	popq %r14
@@ -272,6 +263,7 @@ add_string:
   pushq %rdi
   pushq %rsi
   movq -24(%rbp), %rdi
+  addq $17, %rdi
   pushq %r9
   call my_malloc
   popq %r9
@@ -285,7 +277,7 @@ add_string:
   pushq %rdi 
 
   leaq 16(%rdi), %rsi
-  leaq 16(%r12), %rdi  
+  leaq 16(%r12), %rdi  # new string
   call strcat
 
   popq %rdi

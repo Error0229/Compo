@@ -48,9 +48,15 @@ my_malloc:
 	pushq %r14
 	pushq %r15
 	movq %rsp, %rbp
+	pushq %rdi
+	movq %rsp, %rbp
 	andq $-16, %rsp
 	call malloc
 	movq %rbp, %rsp
+	popq %rdx
+	movq %rax, %rdi
+	xorq %rsi, %rsi
+	call memset
 end_my_malloc:
 	popq %r15
 	popq %r14
@@ -254,6 +260,7 @@ add_string:
   pushq %rdi
   pushq %rsi
   movq -24(%rbp), %rdi
+  addq $17, %rdi
   pushq %r9
   call my_malloc
   popq %r9
@@ -267,7 +274,7 @@ add_string:
   pushq %rdi 
 
   leaq 16(%rdi), %rsi
-  leaq 16(%r12), %rdi  
+  leaq 16(%r12), %rdi  # new string
   call strcat
 
   popq %rdi

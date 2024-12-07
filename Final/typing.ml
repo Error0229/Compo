@@ -110,7 +110,7 @@ let rec type_expr ctx expr : texpr * typ =
       | _ -> error "TypeError: unary '-' requires an integer operand")
     | Unot -> (TEunop (op, te), TBool))
   | Ecall (id, args) -> (
-    let fname = id.id in
+    let fname = if id.id <> "main" then id.id else "super_main" in
     match SMap.find_opt fname ctx.funcs with
     | Some (param_types, ret_type) ->
       if List.length param_types <> List.length args then
@@ -207,7 +207,7 @@ let rec type_stmt ctx stmt : tstmt * context =
         (TSset (te1, te2, te3), ctx)
 
 let type_def ctx (id, params, body) : tdef * context =
-  let fname = id.id in
+  let fname = if id.id <> "main" then id.id else "super_main" in
   if SMap.mem fname ctx.funcs then
     error ~loc:id.loc "Function %s is already defined" fname;
   if List.mem fname [ "len"; "range"; "list" ] then
