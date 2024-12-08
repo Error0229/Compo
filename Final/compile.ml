@@ -81,6 +81,8 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
         fun s -> try Hashtbl.find h s with Not_found ->  label "🤷" in
 
       env,  
+        pushq !%r8 ++
+        pushq !%r9 ++
         v1 ++ 
         pushq !%rax ++
         v2 ++
@@ -101,7 +103,9 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
         call "my_malloc" ++       (* %rax has pointer to new block *)
         popq r8 ++
         movq (imm 2) (ind rax) ++ (* Type tag at offset 0 *)
-        movq !%r8 (ind ~ofs:8 rax) (* Value at offset 8 *)
+        movq !%r8 (ind ~ofs:8 rax) ++ (* Value at offset 8 *)
+        popq r9 ++
+        popq r8 
       | Beq
       | Bneq
       | Blt
@@ -340,8 +344,12 @@ and compile_tstmt env (stmt : Ast.tstmt) : X86_64.text * env =
     je ( "end" ^ loop_label)++
     movq (ind ~ofs:16 ~index: r14 ~scale:8 r13) !%rdi ++
     movq !%rdi (ind ~ofs:offset rbp) ++ (* v = l[i]*)
-
+    
+    pushq !%r13 ++
+    pushq !%r14 ++
     body  ++
+    popq r14 ++
+    popq r13 ++
 
   incq !%r14 ++
   jmp loop_label ++
@@ -397,6 +405,10 @@ and compile_tdef env ((fn, body) : Ast.tdef) : X86_64.text * env =
   let prologue = 
     label fn_label ++
     pushq !%rbp ++
+    pushq !%r12 ++
+    pushq !%r13 ++
+    pushq !%r14 ++
+    pushq !%r15 ++
     movq !%rsp !%rbp ++
     addq (imm env.next_offset) !%rsp ++
     param_setup
@@ -414,6 +426,12 @@ and compile_tdef env ((fn, body) : Ast.tdef) : X86_64.text * env =
      ) ++
     label epilogue_label ++
     subq (imm env.next_offset) !%rsp ++
+
+    movq !%rbp !%rsp ++
+    popq r15 ++
+    popq r14 ++
+    popq r13 ++
+    popq r12 ++
     popq rbp ++
     ret
   in
@@ -472,17 +490,19 @@ and compile_function_call env (fn : Ast.fn) (args : Ast.texpr list) : X86_64.tex
   in
   (* Call the function *)
   let code =
-    pushq !%r12 ++
-    pushq !%r13 ++
-    pushq !%r14 ++
-
+    pushq !%r8 ++
+    pushq !%r9 ++
+    pushq !%r10 ++
+    pushq !%r11 ++
+    
     arg_code ++
     call fn_label ++
     (* Adjust the stack pointer if needed *)
     addq (imm (8 * List.length args)) !%rsp ++
-    popq r14 ++
-    popq r13 ++
-    popq r12 
+    popq r11 ++
+    popq r10 ++
+    popq r9 ++
+    popq r8 
   in
   (code, env)
 
@@ -509,7 +529,7 @@ and setup_parameters env (params : Ast.var list) : env * X86_64.text =
     let var_name = param.v_name in
     (* Copy parameter from stack to local variable slot *)
     let param_offset = (* Calculate offset based on call convention *)
-      16 + ((index) * 8)  (* Adjust as needed *)
+      48 + ((index) * 8)  (* Adjust as needed *)
     in
     let code = 
       code ++
@@ -521,6 +541,7 @@ and setup_parameters env (params : Ast.var list) : env * X86_64.text =
   ) (nop, env, 0) params in
   (env, code)
 and prologue fname= 
+(* rsp = 100 *)
     label fname ++
     pushq !%rbp ++
     pushq !%rbx ++
@@ -528,17 +549,21 @@ and prologue fname=
     pushq !%r13 ++ 
     pushq !%r14 ++ 
     pushq !%r15 ++ 
+(* rsp = 52 *)
     movq !%rsp !%rbp
+(* rbp = 52 *)
 and
   (* Epilogue label for returns *)
 epilogue fname = 
     label ("end_" ^ fname) ++
+    movq !%rbp !%rsp ++
     popq r15 ++
     popq r14 ++
     popq r13 ++
     popq r12 ++
     popq rbx ++
     popq rbp ++
+    (* rsp = 100 *)
     ret
 
 and builtins env : env * X86_64.text = 
@@ -557,11 +582,12 @@ my_printf:
   let my_malloc = (
     prologue "my_malloc" ++
     pushq !%rdi ++
-
+    pushq !%rbp ++
     movq !%rsp !%rbp ++
     andq (imm (-16)) !%rsp ++
     call "malloc" ++
     movq !%rbp !%rsp ++
+    popq rbp ++
 
     popq rdx ++
     movq !%rax !%rdi ++
@@ -1103,14 +1129,12 @@ min:
   movq !%r12  (ind ~ofs: 8 rax) ++
  epilogue "Bneq" ++
 
-  prologue "Bcmp" ++
     label "fail_cmp" ++
     movq (ilab "cmp_error_msg") !%rdi ++
     xorq !%rax !%rax ++
     call "my_printf" ++
     movq (imm 1) !%rdi ++
-    call "exit" ++
-epilogue "Bcmp"
+    call "exit" 
 in
 let is_true = 
 inline 
@@ -1140,6 +1164,7 @@ let list =
     jne "fail_func_call" ++
     movq !%r12 !%rax ++ 
 
+    movq !%rbp !%rsp ++
     popq r12 ++
     popq rbp ++
     ret
@@ -1148,8 +1173,11 @@ let range =
     label "range" ++
     pushq !%rbp ++
     pushq !%r12 ++
+    pushq !%r13 ++
+    pushq !%r14 ++
+    pushq !%r15 ++
     movq !%rsp !%rbp ++
-    movq (ind ~ofs:24 rbp) !%r12 ++
+    movq (ind ~ofs:48 rbp) !%r12 ++
 
     movq (ind ~ofs:0 r12) !%rdi ++
     cmpq (imm 2) !%rdi ++
@@ -1165,31 +1193,30 @@ let range =
 
     movq (imm 4) (ind rax) ++ (* Type tag at offset 0 *)
     movq !%r12 (ind ~ofs:8 rax) ++ (* list size at offset 8 *)
-    movq !%rax !%r11 ++  (* save new list to r11*)
-    movq (imm 0) !%r10 ++ (* r10 = i = 0 *)
+    movq !%rax !%r15 ++  (* save new list to r15*)
+    movq (imm 0) !%r14 ++ (* r14 = i = 0 *)
     label "start_range_loop" ++
 
-      cmpq !%r12 !%r10 ++
+      cmpq !%r12 !%r14 ++
       je "end_range" ++
-
-      pushq !%r10 ++
-      pushq !%r11 ++
 
       movq (imm 16) !%rdi ++
       call "my_malloc" ++       (* %rax has pointer to new block *)
-      popq r11 ++
-      popq r10 ++
 
       movq (imm 2) (ind rax) ++ (* Type tag at offset 0 *)
-      movq !%r10 (ind ~ofs:8 rax) ++ (* list size at offset 8 *)
+      movq !%r14 (ind ~ofs:8 rax) ++ (* list size at offset 8 *)
 
-      movq !%rax (ind ~ofs:16 ~index: r10 ~scale:8 r11) ++
+      movq !%rax (ind ~ofs:16 ~index: r14 ~scale:8 r15) ++
 
-      incq !%r10 ++ (* i++ *)
+      incq !%r14 ++ (* i++ *)
     jmp "start_range_loop" ++
 
     label "end_range" ++
-    movq !%r11 !%rax ++
+    movq !%r15 !%rax ++
+    movq !%rbp !%rsp ++
+    popq r15 ++
+    popq r14 ++
+    popq r13 ++
     popq r12 ++
     popq rbp ++
     ret
