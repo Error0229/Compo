@@ -4,6 +4,12 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	addq $-24, %rsp
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
@@ -11,31 +17,31 @@ main:
 	pushq %rax
 	call range
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	pushq %rax
 	call list
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	movq %rax, -16(%rbp)
 	movq -16(%rbp), %rax
 	cmpq $4, 0(%rax)
 	jne fail_for
-	movq %rax, %r10
-	xorq %r11, %r11
+	movq %rax, %r13
+	xorq %r14, %r14
 for_loop_0:
-	cmpq 8(%r10), %r11
+	cmpq 8(%r13), %r14
 	je endfor_loop_0
-	movq 16(%r10,%r11,8), %rdi
+	movq 16(%r13,%r14,8), %rdi
 	movq %rdi, -24(%rbp)
-	pushq %r9
-	pushq %r10
-	pushq %r11
 	movq -24(%rbp), %rax
 	movq %rax, %rdi
 	call print_value
 	call print_newline
-	popq %r11
-	popq %r10
-	popq %r9
-	incq %r11
+	incq %r14
 	jmp for_loop_0
 endfor_loop_0:
 	xorq %rax, %rax
@@ -216,6 +222,9 @@ fail_index_must_int:
 	jmp print_error
 fail_index_out_of_range:
 	movq $out_of_range_error_msg, %rdi
+	jmp print_error
+fail_neg:
+	movq $fail_neg_error_msg, %rdi
 	jmp print_error
 print_error:
 	xorq %rax, %rax
@@ -701,6 +710,8 @@ div_error_msg:
 	.string "error: invalid type for '/' operand\n"
 error_msg:
 	.string "error: invalid value\n"
+fail_neg_error_msg:
+	.string "error: the value cannot apply '-' operation\n"
 false_str:
 	.string "False"
 for_error_msg:

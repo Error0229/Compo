@@ -4,6 +4,12 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	addq $-16, %rsp
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
@@ -11,9 +17,15 @@ main:
 	pushq %rax
 	call range
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	pushq %rax
 	call list
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	movq %rax, -16(%rbp)
 	movq -16(%rbp), %rax
 	cmpq $4, 0(%rax)
@@ -212,6 +224,9 @@ fail_index_must_int:
 	jmp print_error
 fail_index_out_of_range:
 	movq $out_of_range_error_msg, %rdi
+	jmp print_error
+fail_neg:
+	movq $fail_neg_error_msg, %rdi
 	jmp print_error
 print_error:
 	xorq %rax, %rax
@@ -697,6 +712,8 @@ div_error_msg:
 	.string "error: invalid type for '/' operand\n"
 error_msg:
 	.string "error: invalid value\n"
+fail_neg_error_msg:
+	.string "error: the value cannot apply '-' operation\n"
 false_str:
 	.string "False"
 for_error_msg:

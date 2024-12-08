@@ -173,7 +173,34 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
       movq (ind ~ofs: 8 rax) !%rsi ++ (* move index to rsi*)
       movq (ind ~ofs:16 ~index:rsi ~scale:8 rdi) !%rax 
 
-  | _ -> failwith "TODO texpr"
+  | TEunop (op, e) ->
+    
+    let env, v = compile_texpr env e in
+    env, 
+( 
+    match op with 
+      | Uneg ->
+        v ++ 
+        cmpq (imm 2) (ind rax) ++
+        jne "fail_neg" ++
+        movq  (ind ~ofs:8 rax) !%rdi ++
+        imulq (imm (-1)) !%rdi ++
+        movq !%rdi (ind ~ofs:8 rax)
+      | Unot ->
+        v ++ 
+        movq !%rax !%rdi ++
+        call "is_true" ++
+        xorq (imm 1) !%rax ++
+        pushq !%rax ++
+        movq (imm 16) !%rdi ++
+        call "my_malloc" ++
+        popq rdi ++
+        movq (imm 1) (ind rax) ++
+        movq !%rdi (ind ~ofs:8 rax) 
+ )
+
+
+  | _ -> failwith "how"
   (* ... Handle other cases ... *)
   and compile_constant env (cst : Ast.constant) : env * X86_64.text =
   match cst with
@@ -306,44 +333,17 @@ and compile_tstmt env (stmt : Ast.tstmt) : X86_64.text * env =
   l ++
   cmpq (imm 4) (ind rax) ++ (* rax is the list*)
   jne "fail_for" ++
-  movq !%rax !%r10 ++
-  
-  (* movq (ind ~ofs: 8 rax) !%rdi ++ (* move the l.len to rdi*)
-  imulq (imm 8) !%rdi ++
-  addq (imm 16) !%rdi ++
-  pushq !%rax ++
-  call "my_malloc" ++
-  popq r9 ++
-
-  movq !%rax !%r10 ++
-
-  movq (imm 4) (ind ~ofs:0 r10) ++ (* r10 = []*)
-  movq (ind ~ofs: 8 r9) !%rdx ++ (* move the l.len to rdi*)
-  movq !%rdx (ind ~ofs:8 r10) ++
-  leaq (ind ~ofs: 16 r9) rsi ++ (* source *)
-  leaq (ind ~ofs: 16 r10) rdi ++ (* destination *)
-  imulq (imm 8) !%rdx ++
-  pushq !%r10 ++
-  pushq !%r9 ++
-  call "memcpy" ++
-  popq r9 ++ *)
-  (* popq r10 ++ *)(* r10 = l *)
-  xorq !%r11 !%r11 ++ (* r11 = i = 0*)
+  movq !%rax !%r13 ++
+  xorq !%r14 !%r14 ++ (* r14 = i = 0*)
   label loop_label ++
-    cmpq (ind ~ofs: 8 r10) !%r11 ++ (* compare i with l.len *)
+    cmpq (ind ~ofs: 8 r13) !%r14 ++ (* compare i with l.len *)
     je ( "end" ^ loop_label)++
-    movq (ind ~ofs:16 ~index: r11 ~scale:8 r10) !%rdi ++
+    movq (ind ~ofs:16 ~index: r14 ~scale:8 r13) !%rdi ++
     movq !%rdi (ind ~ofs:offset rbp) ++ (* v = l[i]*)
 
-    pushq !%r9 ++
-    pushq !%r10 ++
-    pushq !%r11 ++
     body  ++
-    popq r11 ++
-    popq r10 ++
-    popq r9 ++
 
-  incq !%r11 ++
+  incq !%r14 ++
   jmp loop_label ++
  
   label ("end" ^ loop_label)
@@ -472,10 +472,17 @@ and compile_function_call env (fn : Ast.fn) (args : Ast.texpr list) : X86_64.tex
   in
   (* Call the function *)
   let code =
+    pushq !%r12 ++
+    pushq !%r13 ++
+    pushq !%r14 ++
+
     arg_code ++
     call fn_label ++
     (* Adjust the stack pointer if needed *)
-    addq (imm (8 * List.length args)) !%rsp
+    addq (imm (8 * List.length args)) !%rsp ++
+    popq r14 ++
+    popq r13 ++
+    popq r12 
   in
   (code, env)
 
@@ -725,6 +732,10 @@ in
   movq (ilab "out_of_range_error_msg") !%rdi ++
   jmp "print_error" ++
 
+  label "fail_neg" ++
+  movq (ilab "fail_neg_error_msg") !%rdi ++
+  jmp "print_error" ++
+
   label "print_error" ++
   xorq !%rax !%rax ++
   call "my_printf" ++
@@ -751,6 +762,7 @@ in
     ("error: the index of a list must be an interger", "bad_index_error_msg");
     ("error: the index is out of range\n", "out_of_range_error_msg");
     ("error: the for loop can only iterate a list\n", "for_error_msg");
+    ("error: the value cannot apply '-' operation\n", "fail_neg_error_msg");
 
     ("\n", "newline_str");
     ( "[", "list_start");

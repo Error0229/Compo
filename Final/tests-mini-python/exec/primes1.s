@@ -4,6 +4,9 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	addq $-8, %rsp
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq $16, %rdi
 	call my_malloc
 	movq $2, 0(%rax)
@@ -11,6 +14,9 @@ main:
 	pushq %rax
 	call primes
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	movq %rax, %rdi
 	call print_value
 	call print_newline
@@ -27,27 +33,36 @@ prefix:
 	movq %rax, -8(%rbp)
 	movq 24(%rbp), %rax
 	movq %rax, -16(%rbp)
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -8(%rbp), %rax
 	pushq %rax
 	call range
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	pushq %rax
 	call list
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	movq %rax, -32(%rbp)
 	movq -32(%rbp), %rax
 	cmpq $4, 0(%rax)
 	jne fail_for
-	movq %rax, %r10
-	xorq %r11, %r11
+	movq %rax, %r13
+	xorq %r14, %r14
 for_loop_0:
-	cmpq 8(%r10), %r11
+	cmpq 8(%r13), %r14
 	je endfor_loop_0
-	movq 16(%r10,%r11,8), %rdi
+	movq 16(%r13,%r14,8), %rdi
 	movq %rdi, -40(%rbp)
-	pushq %r9
-	pushq %r10
-	pushq %r11
 	movq -32(%rbp), %rax
 	cmpq $4, 0(%rax)
 	jne fail_get
@@ -78,10 +93,7 @@ for_loop_0:
 	popq %rsi
 	popq %rdi
 	movq %rax, 16(%rdi,%rsi,8)
-	popq %r11
-	popq %r10
-	popq %r9
-	incq %r11
+	incq %r14
 	jmp for_loop_0
 endfor_loop_0:
 	movq -32(%rbp), %rax
@@ -103,6 +115,12 @@ range2:
 	movq %rax, -8(%rbp)
 	movq 24(%rbp), %rax
 	movq %rax, -16(%rbp)
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -16(%rbp), %rax
 	pushq %rax
 	movq -8(%rbp), %rax
@@ -135,9 +153,15 @@ range2:
 	pushq %rax
 	call range
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	pushq %rax
 	call list
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	movq %rax, -32(%rbp)
 	movq $16, %rdi
 	call my_malloc
@@ -147,16 +171,13 @@ range2:
 	movq -32(%rbp), %rax
 	cmpq $4, 0(%rax)
 	jne fail_for
-	movq %rax, %r10
-	xorq %r11, %r11
+	movq %rax, %r13
+	xorq %r14, %r14
 for_loop_1:
-	cmpq 8(%r10), %r11
+	cmpq 8(%r13), %r14
 	je endfor_loop_1
-	movq 16(%r10,%r11,8), %rdi
+	movq 16(%r13,%r14,8), %rdi
 	movq %rdi, -48(%rbp)
-	pushq %r9
-	pushq %r10
-	pushq %r11
 	movq -32(%rbp), %rax
 	cmpq $4, 0(%rax)
 	jne fail_get
@@ -195,10 +216,7 @@ for_loop_1:
 	popq %rdi
 	call Badd
 	movq %rax, -40(%rbp)
-	popq %r11
-	popq %r10
-	popq %r9
-	incq %r11
+	incq %r14
 	jmp for_loop_1
 endfor_loop_1:
 	movq -32(%rbp), %rax
@@ -228,16 +246,13 @@ filter_out:
 	movq -16(%rbp), %rax
 	cmpq $4, 0(%rax)
 	jne fail_for
-	movq %rax, %r10
-	xorq %r11, %r11
+	movq %rax, %r13
+	xorq %r14, %r14
 for_loop_2:
-	cmpq 8(%r10), %r11
+	cmpq 8(%r13), %r14
 	je endfor_loop_2
-	movq 16(%r10,%r11,8), %rdi
+	movq 16(%r13,%r14,8), %rdi
 	movq %rdi, -40(%rbp)
-	pushq %r9
-	pushq %r10
-	pushq %r11
 	movq -40(%rbp), %rax
 	pushq %rax
 	movq -8(%rbp), %rax
@@ -320,10 +335,7 @@ endif_5:
 	popq %rdi
 	call Badd
 	movq %rax, -32(%rbp)
-	popq %r11
-	popq %r10
-	popq %r9
-	incq %r11
+	incq %r14
 	jmp for_loop_2
 endfor_loop_2:
 	pushq %rdi
@@ -341,6 +353,9 @@ primes:
 	addq $-40, %rsp
 	movq 16(%rbp), %rax
 	movq %rax, -8(%rbp)
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -8(%rbp), %rax
 	pushq %rax
 	movq $16, %rdi
@@ -350,6 +365,9 @@ primes:
 	pushq %rax
 	call range2
 	addq $16, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	movq %rax, -24(%rbp)
 	movq $16, %rdi
 	call my_malloc
@@ -359,16 +377,13 @@ primes:
 	movq -24(%rbp), %rax
 	cmpq $4, 0(%rax)
 	jne fail_for
-	movq %rax, %r10
-	xorq %r11, %r11
+	movq %rax, %r13
+	xorq %r14, %r14
 for_loop_6:
-	cmpq 8(%r10), %r11
+	cmpq 8(%r13), %r14
 	je endfor_loop_6
-	movq 16(%r10,%r11,8), %rdi
+	movq 16(%r13,%r14,8), %rdi
 	movq %rdi, -40(%rbp)
-	pushq %r9
-	pushq %r10
-	pushq %r11
 	movq -40(%rbp), %rax
 	pushq %rax
 	movq $16, %rdi
@@ -410,27 +425,36 @@ for_loop_6:
 	popq %rdi
 	call Badd
 	movq %rax, -32(%rbp)
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -24(%rbp), %rax
 	pushq %rax
 	movq -40(%rbp), %rax
 	pushq %rax
 	call filter_out
 	addq $16, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	jmp endif_8
 else_7:
 endif_8:
-	popq %r11
-	popq %r10
-	popq %r9
-	incq %r11
+	incq %r14
 	jmp for_loop_6
 endfor_loop_6:
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -24(%rbp), %rax
 	pushq %rax
 	movq -32(%rbp), %rax
 	pushq %rax
 	call prefix
 	addq $16, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	jmp end_primes
 	pushq %rdi
 	movq $8, %rdi
@@ -614,6 +638,9 @@ fail_index_must_int:
 	jmp print_error
 fail_index_out_of_range:
 	movq $out_of_range_error_msg, %rdi
+	jmp print_error
+fail_neg:
+	movq $fail_neg_error_msg, %rdi
 	jmp print_error
 print_error:
 	xorq %rax, %rax
@@ -1099,6 +1126,8 @@ div_error_msg:
 	.string "error: invalid type for '/' operand\n"
 error_msg:
 	.string "error: invalid value\n"
+fail_neg_error_msg:
+	.string "error: the value cannot apply '-' operation\n"
 false_str:
 	.string "False"
 for_error_msg:

@@ -4,8 +4,14 @@ main:
 	pushq %rbp
 	movq %rsp, %rbp
 	addq $-8, %rsp
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	call super_main
 	addq $0, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	xorq %rax, %rax
 end_main:
 	subq $-8, %rsp
@@ -31,6 +37,12 @@ print_row:
 	movq %r12, %rax
 	popq %r12
 	movq %rax, -32(%rbp)
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -16(%rbp), %rax
 	pushq %rax
 	movq $16, %rdi
@@ -43,21 +55,24 @@ print_row:
 	pushq %rax
 	call range
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	pushq %rax
 	call list
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	cmpq $4, 0(%rax)
 	jne fail_for
-	movq %rax, %r10
-	xorq %r11, %r11
+	movq %rax, %r13
+	xorq %r14, %r14
 for_loop_1:
-	cmpq 8(%r10), %r11
+	cmpq 8(%r13), %r14
 	je endfor_loop_1
-	movq 16(%r10,%r11,8), %rdi
+	movq 16(%r13,%r14,8), %rdi
 	movq %rdi, -40(%rbp)
-	pushq %r9
-	pushq %r10
-	pushq %r11
 	movq -8(%rbp), %rax
 	cmpq $4, 0(%rax)
 	jne fail_get
@@ -112,10 +127,7 @@ else_4:
 	call Badd
 	movq %rax, -32(%rbp)
 endif_5:
-	popq %r11
-	popq %r10
-	popq %r9
-	incq %r11
+	incq %r14
 	jmp for_loop_1
 endfor_loop_1:
 	movq -32(%rbp), %rax
@@ -275,6 +287,9 @@ endif_7:
 	call is_true
 	cmpq $0, %rax
 	je else_8
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -16(%rbp), %rax
 	pushq %rax
 	movq $16, %rdi
@@ -304,6 +319,9 @@ endif_7:
 	pushq %rax
 	call compute_row
 	addq $16, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	jmp endif_9
 else_8:
 endif_9:
@@ -325,6 +343,12 @@ super_main:
 	movq $2, 0(%rax)
 	movq $40, 8(%rax)
 	movq %rax, -16(%rbp)
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -16(%rbp), %rax
 	pushq %rax
 	movq $16, %rdi
@@ -337,29 +361,44 @@ super_main:
 	pushq %rax
 	call range
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	pushq %rax
 	call list
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	movq %rax, -24(%rbp)
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -16(%rbp), %rax
 	pushq %rax
 	call range
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	pushq %rax
 	call list
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	cmpq $4, 0(%rax)
 	jne fail_for
-	movq %rax, %r10
-	xorq %r11, %r11
+	movq %rax, %r13
+	xorq %r14, %r14
 for_loop_10:
-	cmpq 8(%r10), %r11
+	cmpq 8(%r13), %r14
 	je endfor_loop_10
-	movq 16(%r10,%r11,8), %rdi
+	movq 16(%r13,%r14,8), %rdi
 	movq %rdi, -32(%rbp)
-	pushq %r9
-	pushq %r10
-	pushq %r11
 	movq -24(%rbp), %rax
 	cmpq $4, 0(%rax)
 	jne fail_get
@@ -381,22 +420,31 @@ for_loop_10:
 	popq %rsi
 	popq %rdi
 	movq %rax, 16(%rdi,%rsi,8)
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -32(%rbp), %rax
 	pushq %rax
 	movq -24(%rbp), %rax
 	pushq %rax
 	call compute_row
 	addq $16, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -32(%rbp), %rax
 	pushq %rax
 	movq -24(%rbp), %rax
 	pushq %rax
 	call print_row
 	addq $16, %rsp
-	popq %r11
-	popq %r10
-	popq %r9
-	incq %r11
+	popq %r14
+	popq %r13
+	popq %r12
+	incq %r14
 	jmp for_loop_10
 endfor_loop_10:
 	pushq %rdi
@@ -581,6 +629,9 @@ fail_index_must_int:
 	jmp print_error
 fail_index_out_of_range:
 	movq $out_of_range_error_msg, %rdi
+	jmp print_error
+fail_neg:
+	movq $fail_neg_error_msg, %rdi
 	jmp print_error
 print_error:
 	xorq %rax, %rax
@@ -1066,6 +1117,8 @@ div_error_msg:
 	.string "error: invalid type for '/' operand\n"
 error_msg:
 	.string "error: invalid value\n"
+fail_neg_error_msg:
+	.string "error: the value cannot apply '-' operation\n"
 false_str:
 	.string "False"
 for_error_msg:

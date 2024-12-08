@@ -48,27 +48,27 @@ main:
 	popq %r12
 	cmpq $4, 0(%rax)
 	jne fail_for
-	movq %rax, %r10
-	xorq %r11, %r11
+	movq %rax, %r13
+	xorq %r14, %r14
 for_loop_1:
-	cmpq 8(%r10), %r11
+	cmpq 8(%r13), %r14
 	je endfor_loop_1
-	movq 16(%r10,%r11,8), %rdi
+	movq 16(%r13,%r14,8), %rdi
 	movq %rdi, -16(%rbp)
-	pushq %r9
-	pushq %r10
-	pushq %r11
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -16(%rbp), %rax
 	pushq %rax
 	call fib
 	addq $8, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	movq %rax, %rdi
 	call print_value
 	call print_newline
-	popq %r11
-	popq %r10
-	popq %r9
-	incq %r11
+	incq %r14
 	jmp for_loop_1
 endfor_loop_1:
 	xorq %rax, %rax
@@ -103,6 +103,9 @@ fibaux:
 	jmp end_fibaux
 	jmp endif_3
 else_2:
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -24(%rbp), %rax
 	pushq %rax
 	movq $16, %rdi
@@ -139,6 +142,9 @@ else_2:
 	pushq %rax
 	call fibaux
 	addq $24, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	jmp end_fibaux
 endif_3:
 	pushq %rdi
@@ -156,6 +162,9 @@ fib:
 	addq $-16, %rsp
 	movq 16(%rbp), %rax
 	movq %rax, -8(%rbp)
+	pushq %r12
+	pushq %r13
+	pushq %r14
 	movq -8(%rbp), %rax
 	pushq %rax
 	movq $16, %rdi
@@ -170,6 +179,9 @@ fib:
 	pushq %rax
 	call fibaux
 	addq $24, %rsp
+	popq %r14
+	popq %r13
+	popq %r12
 	jmp end_fib
 	pushq %rdi
 	movq $8, %rdi
@@ -353,6 +365,9 @@ fail_index_must_int:
 	jmp print_error
 fail_index_out_of_range:
 	movq $out_of_range_error_msg, %rdi
+	jmp print_error
+fail_neg:
+	movq $fail_neg_error_msg, %rdi
 	jmp print_error
 print_error:
 	xorq %rax, %rax
@@ -838,6 +853,8 @@ div_error_msg:
 	.string "error: invalid type for '/' operand\n"
 error_msg:
 	.string "error: invalid value\n"
+fail_neg_error_msg:
+	.string "error: the value cannot apply '-' operation\n"
 false_str:
 	.string "False"
 for_error_msg:
