@@ -64,20 +64,34 @@ def check(b, i, n):
             return False
     return True
 
-def count(b, i, n):
+def count(b, i, n, l):
     if i == n: return 1
-    print(i)
     c = 0
     for x in list(range(n)):
+        # print ("for x in list(range(n)): b, i, x, n, c")
+        # print(b)
+        # print(i)
+        # print(x)
+        # print(n)
+        # print(c)
         b[i] = x
         if check(b, i, n):
-            temp = count(b, i+1, n)
+            # print ("if check: b, i, x, n, c")
+            # print(b)
+            # print(i)
+            # print(x)
+            # print(n)
+            # print(c)
+            # l = l + [[i, n, c]]
+            temp = count(b, i+1, n, l)
+            # print(l)
             c = c + temp
     return c
 
 def q(n):
-    return count(list(range(n)), 0, n)
+    return count(list(range(n)), 0, n, [])
 
-for n in list(range(12)):
-    print("ans:")
-    print(q(n))
+# for n in list(range(10)):
+#     # print("ans:")
+#     print(q(n))
+print(q(9))

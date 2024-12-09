@@ -48,7 +48,7 @@ add:
 	call Badd
 	jmp end_add
 	pushq %rdi
-	movq $8, %rdi
+	movq $16, %rdi
 	call my_malloc
 	movq $0, 0(%rax)
 	popq %rdi
@@ -100,7 +100,7 @@ sub:
 	popq %r8
 	jmp end_sub
 	pushq %rdi
-	movq $8, %rdi
+	movq $16, %rdi
 	call my_malloc
 	movq $0, 0(%rax)
 	popq %rdi
@@ -218,7 +218,7 @@ mul:
 	popq %r8
 	jmp end_mul
 	pushq %rdi
-	movq $8, %rdi
+	movq $16, %rdi
 	call my_malloc
 	movq $0, 0(%rax)
 	popq %rdi
@@ -333,7 +333,7 @@ div:
 	popq %r8
 	jmp end_div
 	pushq %rdi
-	movq $8, %rdi
+	movq $16, %rdi
 	call my_malloc
 	movq $0, 0(%rax)
 	popq %rdi
@@ -386,7 +386,7 @@ of_int:
 	popq %r8
 	jmp end_of_int
 	pushq %rdi
-	movq $8, %rdi
+	movq $16, %rdi
 	call my_malloc
 	movq $0, 0(%rax)
 	popq %rdi
@@ -622,7 +622,7 @@ endif_3:
 	popq %r8
 	jmp end_iter
 	pushq %rdi
-	movq $8, %rdi
+	movq $16, %rdi
 	call my_malloc
 	movq $0, 0(%rax)
 	popq %rdi
@@ -700,7 +700,7 @@ inside:
 	popq %r8
 	jmp end_inside
 	pushq %rdi
-	movq $8, %rdi
+	movq $16, %rdi
 	call my_malloc
 	movq $0, 0(%rax)
 	popq %rdi
@@ -1160,7 +1160,7 @@ endfor_loop_6:
 	jmp for_loop_4
 endfor_loop_4:
 	pushq %rdi
-	movq $8, %rdi
+	movq $16, %rdi
 	call my_malloc
 	movq $0, 0(%rax)
 	popq %rdi
@@ -1385,8 +1385,10 @@ inline_Badd:
 	movq 8(%rdi), %r9
 	movq 8(%rsi), %r10
 	addq %r9, %r10
+	pushq %r10
 	movq $16, %rdi
 	call my_malloc
+	popq %r10
 	movq $2, 0(%rax)
 	movq %r10, 8(%rax)
 	jmp end_inline_Badd
@@ -1455,7 +1457,6 @@ add_string:
 	call memcpy
 	movq %r12, %rax
 
-jmp end_inline_Badd
 end_inline_Badd:
         	addq $64, %rsp
 end_Badd:

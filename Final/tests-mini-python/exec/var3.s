@@ -286,8 +286,10 @@ inline_Badd:
 	movq 8(%rdi), %r9
 	movq 8(%rsi), %r10
 	addq %r9, %r10
+	pushq %r10
 	movq $16, %rdi
 	call my_malloc
+	popq %r10
 	movq $2, 0(%rax)
 	movq %r10, 8(%rax)
 	jmp end_inline_Badd
@@ -356,7 +358,6 @@ add_string:
 	call memcpy
 	movq %r12, %rax
 
-jmp end_inline_Badd
 end_inline_Badd:
         	addq $64, %rsp
 end_Badd:

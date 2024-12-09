@@ -258,7 +258,7 @@ let rec compile_texpr env (expr : Ast.texpr) : env * X86_64.text =
   | Cnone ->
     (* None value, type tag 0 new none🗿*)
     let code =
-      movq (imm 8) !%rdi ++
+      movq (imm 16) !%rdi ++
       call "my_malloc" ++
       movq (imm 0) (ind rax)  (* Type tag 0 *)
     in
@@ -419,7 +419,7 @@ and compile_tdef env ((fn, body) : Ast.tdef) : X86_64.text * env =
       ret_0 
     else
       pushq !%rdi ++
-      movq (imm 8) !%rdi ++
+      movq (imm 16) !%rdi ++
       call "my_malloc" ++
       movq (imm 0) (ind rax)  (* Type tag 0 *) ++
       popq rdi
@@ -816,8 +816,10 @@ label "add_int" ++
   movq (ind ~ofs: 8 rdi) !%r9 ++
   movq (ind ~ofs: 8 rsi) !%r10 ++
   addq !%r9 !%r10 ++
+  pushq !%r10 ++
   movq (imm 16) !%rdi ++      (* Size of the block *)
   call "my_malloc" ++       (* %rax has pointer to new block *)
+  popq r10 ++
   movq (imm 2) (ind rax) ++ (* Type tag at offset 0 *)
   movq !%r10 (ind ~ofs:8 rax) ++  (* Value at offset 8 *)
   jmp "end_inline_Badd" ++
@@ -890,10 +892,9 @@ label "add_list" ++
   movq !%r12 !%rax ++
   (* use memcpy to complete the list concat*)
  inline "
-jmp end_inline_Badd
 end_inline_Badd:
         " ++
-        addq (imm64 64L) !%rsp++
+        addq (imm 64) !%rsp++
         epilogue "Badd"
  in 
 let cmps =
