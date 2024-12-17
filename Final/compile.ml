@@ -567,6 +567,19 @@ epilogue fname =
     ret
 
 and builtins env : env * X86_64.text = 
+  let my_C_builtin =  (
+inline "
+my_memcpy:
+  pushq %rbp
+  movq %rsp, %rbp
+  andq $-16, %rsp 
+  call memcpy
+  movq %rbp, %rsp
+  popq %rbp
+  ret
+"
+  ) 
+  in
   let my_printf = (
 inline "  
 my_printf:
@@ -874,7 +887,9 @@ label "add_list" ++
   imulq (imm 8) !%rcx ++
   addq (imm 16) !%rcx ++
   movq !%rcx !%rdi ++
+  pushq !%r9 ++
   call "my_malloc" ++
+  popq r9 ++
   movq !%rax !%r12 ++
   movq (imm 4) (ind ~ofs:0 r12) ++ (* r12 = []*)
   movq !%r15 (ind ~ofs:8 r12) ++
@@ -882,13 +897,16 @@ label "add_list" ++
   leaq (ind ~ofs: 16 r12) rdi ++
   movq (ind ~ofs: 8 r13) !%rdx ++
   imulq (imm 8) !%rdx ++
-  call "memcpy" ++
-
+  pushq !%r9 ++
+  call "my_memcpy" ++
+  popq r9 ++
   leaq (ind ~ofs: 16 r14) rsi ++
   leaq (ind ~ofs: 16 ~index: r9 ~scale: 8 r12) rdi ++
   movq (ind ~ofs: 8 r14) !%rdx ++ 
   imulq (imm 8) !%rdx ++
-  call "memcpy" ++
+  pushq !%r9 ++
+  call "my_memcpy" ++
+  popq r9 ++
   movq !%r12 !%rax ++
   (* use memcpy to complete the list concat*)
  inline "
@@ -1096,12 +1114,16 @@ min:
   call "Bgt" ++
   popq rsi ++
   popq rdi ++
+  pushq !%r12 ++
   movq (ind ~ofs: 8 rax) !%r12 ++
   call "Beq" ++
+  pushq !%r13 ++
   movq (ind ~ofs: 8 rax) !%r13 ++
 
   orq !%r12 !%r13 ++
   movq !%r13  (ind ~ofs: 8 rax) ++
+  popq r13 ++
+  popq r12 ++
 
  epilogue "Bge" ++
  
@@ -1223,7 +1245,7 @@ let range =
     ret
 in
   let env = { env with data = env.data @ data_items } in
-  (env, my_malloc ++ len ++ print_value ++ inline_Badd ++ my_printf ++ cmps ++ is_true ++ range ++ list )
+  (env, my_C_builtin ++ my_malloc ++ len ++ print_value ++ inline_Badd ++ my_printf ++ cmps ++ is_true ++ range ++ list )
 
 and file ?debug:(b = false) (p : Ast.tfile) : X86_64.program =
   debug := b;

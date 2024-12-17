@@ -53,6 +53,15 @@ end_main:
 	popq %r12
 	popq %rbp
 	ret
+
+my_memcpy:
+  pushq %rbp
+  movq %rsp, %rbp
+  andq $-16, %rsp 
+  call memcpy
+  movq %rbp, %rsp
+  popq %rbp
+  ret
 my_malloc:
 	pushq %rbp
 	pushq %rbx
@@ -321,7 +330,9 @@ add_string:
 	imulq $8, %rcx
 	addq $16, %rcx
 	movq %rcx, %rdi
+	pushq %r9
 	call my_malloc
+	popq %r9
 	movq %rax, %r12
 	movq $4, 0(%r12)
 	movq %r15, 8(%r12)
@@ -329,12 +340,16 @@ add_string:
 	leaq 16(%r12), %rdi
 	movq 8(%r13), %rdx
 	imulq $8, %rdx
-	call memcpy
+	pushq %r9
+	call my_memcpy
+	popq %r9
 	leaq 16(%r14), %rsi
 	leaq 16(%r12,%r9,8), %rdi
 	movq 8(%r14), %rdx
 	imulq $8, %rdx
-	call memcpy
+	pushq %r9
+	call my_memcpy
+	popq %r9
 	movq %r12, %rax
 
 end_inline_Badd:
@@ -553,11 +568,15 @@ Bge:
 	call Bgt
 	popq %rsi
 	popq %rdi
+	pushq %r12
 	movq 8(%rax), %r12
 	call Beq
+	pushq %r13
 	movq 8(%rax), %r13
 	orq %r12, %r13
 	movq %r13, 8(%rax)
+	popq %r13
+	popq %r12
 end_Bge:
 	movq %rbp, %rsp
 	popq %r15
