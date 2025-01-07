@@ -4,30 +4,18 @@ Team members:
 + 110590004 林奕廷
 + 110590017 陳姿安
 
+## Technical Choices
 
-## **Technical Choices**
+We implemented this mini-Python compiler using a direct, straightforward approach: compiling each statement and expression from our typed AST (Abstract Syntax Tree) directly to the corresponding x86-64 assembly code without any optimization passes. Despite its simplicity, this solution passes all the provided tests.
 
-The **mini-Python compiler** was designed and implemented with an emphasis on correctness rather than optimization. Every statement and expression was directly compiled into assembly code from a Typed AST without intermediate optimization passes. Despite this simplistic approach, the compiler successfully passed all test cases, demonstrating functional correctness.
+### Motivation Behind the Direct Compilation
 
-### **Reasoning Behind the Approach**
+1. **Deadline Constraints**  
+   We began this project very early, at a stage where we had not yet covered the optimization techniques introduced in Chapter 10. Our priority was to ensure we had a fully functional compiler before multiple deadlines started to overlap. As a result, we focused on correctness first, deferring advanced optimizations to a later stage if time permitted.
 
-The primary reason for adopting this direct compilation method was **time constraints and deadline pressure**. We prioritized an early start to avoid multiple overlapping deadlines, allowing for consistent progress even before covering the advanced compiler optimization techniques discussed in **Chapter 10** of our curriculum. As a result, the compiler was built incrementally, focusing on correctness rather than efficiency.
+2. **Simplicity Over Complexity**  
+   By compiling each construct (for example, a binary operation, a function call, or a list creation) as a small, self-contained sequence of assembly instructions, we greatly simplified the compiler design. This “function-per-expression” style also made the code easier to write and debug in a short timeframe.
 
-### **Current Compilation Strategy**
+### Conclusion
 
-1. **Direct Translation from Typed AST to Assembly**  
-   - Each expression and statement is compiled directly into x86-64 assembly instructions.  
-   - Complex expressions (e.g., binary operations, list handling, and conditionals) are broken down into function calls or inline assembly blocks.  
-   - Memory management relies on explicit calls to `my_malloc` and standard memory operations.
-
-2. **Memory Management**  
-   - A custom memory allocation function (`my_malloc`) is used for dynamic data structures (e.g., lists, strings).  
-   - Type tags are explicitly assigned to ensure runtime type checking.
-
-3. **Error Handling**  
-   - Runtime checks are embedded in the generated assembly code to validate types, index bounds, and operation compatibility.  
-   - Custom error labels handle invalid operations with descriptive error messages.
-
-4. **Function Calls and Parameter Passing**  
-   - Function arguments are evaluated and pushed onto the stack.  
-   - Return values are handled consistently, with standard stack frame conventions maintained across calls.
+In summary, our mini-Python compiler demonstrates how a direct translation from a typed AST to x86-64 assembly can be both straightforward and effective in terms of functionality. However, the lack of optimization means that the generated code may not perform efficiently in complex scenarios. If we had more time, we would introduce multiple intermediate representations to facilitate advanced optimizations such as instruction selection, register allocation, and better memory management.
